@@ -1,0 +1,78 @@
+version: '3.8'
+# Production compose — for self-hosted / VPS deployment.
+# SECURITY CHECKLIST before deploying:
+#   1. Generate a strong SECRET_KEY: python -c "import secrets; print(secrets.token_hex(32))"
+#   2. Use a strong DB_PASSWORD (min 20 chars, random)
+#   3. Set FRONTEND_URL to your actual production domain (no trailing slash)
+#   4. Put this behind a reverse proxy (Nginx/Caddy) that handles TLS/HTTPS
+#   5. Never expose port 5432 to the public internet (db has no ports: block)
+
+services:
+  db:
+    image: postgres:15-alpine
+    restart: always
+    environment:
+      POSTGRES_USER: ${DB_USER}
+      POSTGRES_PASSWORD: ${DB_PASSWORD}
+      POSTGRES_DB: fitness_challenge
+    # SECURITY: No ports: block — DB is never reachable from the public internet.
+    # It is only accessible via the internal backend_net Docker network.
+    expose:
+      - "5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER}"]
+      interval: 10s
+      retries: 5
+    networks:
+      - backend_net
+
+  backend:
+    build:
+      context: ./apps/backend
+      dockerfile: Dockerfile
+    restart: always
+    # SECURITY: Do NOT expose 3001 directly to the internet.
+    # Bind only to localhost — your reverse proxy (Nginx/Caddy) forwards to it.
+    expose:
+      - "3001"
+    environment:
+      DATABASE_URL: postgresql://${DB_USER}:${DB_PASSWORD}@db:5432/fitness_challenge
+      GROQ_API_KEY: ${GROQ_API_KEY}
+      FRONTEND_URL: ${FRONTEND_URL}
+      SECRET_KEY: ${SECRET_KEY}
+      ENVIRONMENT: production
+      ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-30}
+      LOGIN_MAX_FAILURES: ${LOGIN_MAX_FAILURES:-5}
+      LOGIN_LOCKOUT_SECONDS: ${LOGIN_LOCKOUT_SECONDS:-900}
+    depends_on:
+      db:
+        condition: service_healthy
+    networks:
+      - backend_net
+      - frontend_net
+
+  frontend:
+    build:
+      context: ./apps/frontend
+      dockerfile: Dockerfile
+      args:
+        VITE_API_URL: ${BACKEND_URL}
+    restart: always
+    ports:
+      - "80:80"
+      - "443:443"  # TLS termination — configure in nginx.conf
+    depends_on:
+      - backend
+    networks:
+      - frontend_net
+
+networks:
+  backend_net:
+    driver: bridge
+  frontend_net:
+    driver: bridge
+
+volumes:
+  postgres_data:

@@ -1,0 +1,91 @@
+version: '3.8'
+
+services:
+  # ── PostgreSQL 15 ─────────────────────────────────────────────────────────────
+  db:
+    image: postgres:15-alpine
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: fitness
+      POSTGRES_PASSWORD: fitness123
+      POSTGRES_DB: fitness_challenge
+    # SECURITY: Port 5432 is NOT exposed to the host — only the backend container
+    # can reach the database via the internal Docker network.
+    # To connect with a DB client locally: docker exec -it <db-container> psql ...
+    expose:
+      - "5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U fitness -d fitness_challenge"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+    networks:
+      - backend_net
+
+  # ── FastAPI Backend ───────────────────────────────────────────────────────────
+  backend:
+    build:
+      context: ./apps/backend
+      dockerfile: Dockerfile.dev
+    restart: unless-stopped
+    ports:
+      - "3001:3001"
+    environment:
+      DATABASE_URL: postgresql://fitness:fitness123@db:5432/fitness_challenge
+      GROQ_API_KEY: ${GROQ_API_KEY}
+      FRONTEND_URL: http://localhost:5173
+      ENVIRONMENT: development
+      SECRET_KEY: ${SECRET_KEY:-dev_secret_change_in_production}
+      ACCESS_TOKEN_EXPIRE_MINUTES: ${ACCESS_TOKEN_EXPIRE_MINUTES:-30}
+      LOGIN_MAX_FAILURES: ${LOGIN_MAX_FAILURES:-5}
+      LOGIN_LOCKOUT_SECONDS: ${LOGIN_LOCKOUT_SECONDS:-900}
+    depends_on:
+      db:
+        condition: service_healthy
+    volumes:
+      - ./apps/backend:/app   # hot reload
+    command: >
+      sh -c "
+        echo 'Running Alembic migrations...' &&
+        alembic upgrade head &&
+        echo 'Seeding database...' &&
+        python seed.py &&
+        echo 'Starting backend...' &&
+        uvicorn main:app --host 0.0.0.0 --port 3001 --reload
+      "
+    networks:
+      - backend_net
+      - frontend_net
+
+  # ── React Frontend ────────────────────────────────────────────────────────────
+  frontend:
+    build:
+      context: ./apps/frontend
+      dockerfile: Dockerfile.dev
+    restart: unless-stopped
+    ports:
+      - "5173:5173"
+    environment:
+      VITE_API_URL: http://localhost:3001
+    volumes:
+      - ./apps/frontend/src:/app/src
+      - ./apps/frontend/public:/app/public
+      - ./apps/frontend/vite.config.ts:/app/vite.config.ts
+    depends_on:
+      - backend
+    networks:
+      - frontend_net
+
+networks:
+  # Backend network: only backend + db — db is NOT reachable from frontend
+  backend_net:
+    driver: bridge
+  # Frontend network: frontend + backend only
+  frontend_net:
+    driver: bridge
+
+volumes:
+  postgres_data:    # persists across `docker compose down` / `up`
