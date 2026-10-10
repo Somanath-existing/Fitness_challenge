@@ -335,3 +335,54 @@ class TestFriends:
         client.post("/api/friends/request", json=payload, params=params)
         r = client.post("/api/friends/request", json=payload, params=params)
         assert r.status_code == 409
+
+
+# ── CORS ──────────────────────────────────────────────────────────────────────
+
+class TestCORS:
+    def test_vercel_preview_origin_allowed(self):
+        origin = "https://fitness-challenge-rimy7w1ol-somanath-existings-projects.vercel.app"
+        r = client.options(
+            "/api/leaderboard?limit=100&scope=global",
+            headers={
+                "Origin": origin,
+                "Access-Control-Request-Method": "GET",
+                "Access-Control-Request-Headers": "authorization,content-type",
+            },
+        )
+        assert r.status_code == 200
+        assert r.headers.get("access-control-allow-origin") == origin
+        assert r.headers.get("access-control-allow-credentials") == "true"
+
+    def test_vercel_get_request_cors_headers(self):
+        origin = "https://fitness-challenge-rimy7w1ol-somanath-existings-projects.vercel.app"
+        r = client.get(
+            "/api/leaderboard?limit=100&scope=global",
+            headers={"Origin": origin},
+        )
+        assert r.status_code == 200
+        assert r.headers.get("access-control-allow-origin") == origin
+        assert r.headers.get("access-control-allow-credentials") == "true"
+
+    def test_localhost_origin_allowed(self):
+        origin = "http://localhost:5173"
+        r = client.options(
+            "/api/leaderboard?limit=100&scope=global",
+            headers={
+                "Origin": origin,
+                "Access-Control-Request-Method": "GET",
+            },
+        )
+        assert r.status_code == 200
+        assert r.headers.get("access-control-allow-origin") == origin
+
+    def test_disallowed_origin_rejected(self):
+        r = client.options(
+            "/api/leaderboard?limit=100&scope=global",
+            headers={
+                "Origin": "https://malicious-site.com",
+                "Access-Control-Request-Method": "GET",
+            },
+        )
+        assert r.status_code == 400
+

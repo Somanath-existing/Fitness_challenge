@@ -101,18 +101,37 @@ app.add_middleware(RequestLoggingMiddleware)
 app.add_middleware(SecurityHeadersMiddleware)
 
 # ── CORS ──────────────────────────────────────────────────────────────────────
-# Explicit allowlist only — wildcard "*" is NEVER acceptable
+# Allow explicit configured origins + Vercel deployment URLs + local development
 _raw_origins = os.getenv("FRONTEND_URL", "http://localhost:5173")
-ALLOWED_ORIGINS = [o.strip() for o in _raw_origins.split(",") if o.strip()]
+ALLOWED_ORIGINS = [o.strip().rstrip("/") for o in _raw_origins.split(",") if o.strip()]
+
+for default_origin in (
+    "http://localhost:5173",
+    "http://localhost:3000",
+    "http://localhost:3001",
+    "http://127.0.0.1:5173",
+    "http://127.0.0.1:3000",
+    "http://127.0.0.1:3001",
+):
+    if default_origin not in ALLOWED_ORIGINS:
+        ALLOWED_ORIGINS.append(default_origin)
+
+# Match any Vercel deployment URL (e.g. preview hash domains) and localhost
+ALLOWED_ORIGIN_REGEX = (
+    r"^(https://([a-zA-Z0-9_-]+\.)*(vercel\.app|onrender\.com)"
+    r"|http://(localhost|127\.0\.0\.1)(:\d+)?)$"
+)
 
 app.add_middleware(
     CORSMiddleware,
     allow_origins=ALLOWED_ORIGINS,
+    allow_origin_regex=ALLOWED_ORIGIN_REGEX,
     allow_credentials=True,
-    allow_methods=["GET", "POST", "PUT", "DELETE", "OPTIONS"],
-    allow_headers=["Content-Type", "Authorization", "Accept"],
-    expose_headers=[],  # Don't leak internal headers
+    allow_methods=["*"],
+    allow_headers=["*"],
+    expose_headers=["*"],
 )
+
 
 # ── Routers ───────────────────────────────────────────────────────────────────
 app.include_router(auth.router)
