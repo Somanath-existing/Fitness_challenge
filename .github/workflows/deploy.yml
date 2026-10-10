@@ -79,10 +79,6 @@ jobs:
         working-directory: apps/frontend
         run: npm install
 
-      - name: Build frontend
-        working-directory: apps/frontend
-        run: npm run build
-
       - name: Install Vercel CLI
         run: npm install --global vercel@latest
 
@@ -91,6 +87,30 @@ jobs:
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+
+      - name: Load and validate production API URL
+        run: |
+          node <<'NODE'
+          const fs = require('node:fs')
+          const dotenv = require('./apps/frontend/node_modules/dotenv')
+          const envFile = fs.readFileSync('.vercel/.env.production.local', 'utf8')
+          const apiUrl = dotenv.parse(envFile).VITE_API_URL
+
+          if (!apiUrl) {
+            throw new Error('VITE_API_URL is missing from Vercel production environment variables')
+          }
+
+          const parsedUrl = new URL(apiUrl)
+          if (parsedUrl.protocol !== 'https:' || parsedUrl.hostname === 'localhost') {
+            throw new Error('VITE_API_URL must be an HTTPS URL for the deployed backend')
+          }
+
+          fs.appendFileSync(process.env.GITHUB_ENV, `VITE_API_URL=${apiUrl}\n`)
+          NODE
+
+      - name: Build frontend
+        working-directory: apps/frontend
+        run: npm run build
 
       - name: Prepare Vercel static output
         run: |
