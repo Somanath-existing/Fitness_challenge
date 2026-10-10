@@ -93,10 +93,9 @@ jobs:
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
 
       - name: Prepare Vercel static output
-        working-directory: apps/frontend
         run: |
           mkdir -p .vercel/output/static
-          cp -R dist/. .vercel/output/static/
+          cp -R apps/frontend/dist/. .vercel/output/static/
           printf '%s\n' '{"version":3,"routes":[{"src":"/(.*)","dest":"/index.html"}]}' > .vercel/output/config.json
 
       - name: Deploy Project Artifacts to Vercel
