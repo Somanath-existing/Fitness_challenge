@@ -28,8 +28,8 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/users", tags=["users"])
 
-# Rate limit: registrations per hour per IP (configurable via env)
-_register_max_calls = int(os.getenv("REGISTER_RATE_LIMIT_MAX", "10"))
+# Rate limit: registrations per hour per IP (configurable via env, default: 30)
+_register_max_calls = int(os.getenv("REGISTER_RATE_LIMIT_MAX", "30"))
 _register_window = int(os.getenv("REGISTER_RATE_LIMIT_WINDOW", "3600"))
 _register_rate_limit = rate_limit(max_calls=_register_max_calls, window_seconds=_register_window)
 
