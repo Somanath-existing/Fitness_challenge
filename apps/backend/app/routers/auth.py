@@ -44,8 +44,11 @@ COOKIE_NAME = "access_token"
 IS_PRODUCTION = os.getenv("ENVIRONMENT") == "production"
 TOKEN_EXPIRY_SECONDS = ACCESS_TOKEN_EXPIRE_MINUTES * 60
 
-# Rate limit: 5 login attempts per IP per 5 minutes
-_login_rate_limit = rate_limit(max_calls=5, window_seconds=300)
+# Rate limit: login attempts per IP per window (configurable via env)
+_login_max_calls = int(os.getenv("LOGIN_RATE_LIMIT_MAX", "30"))
+_login_window = int(os.getenv("LOGIN_RATE_LIMIT_WINDOW", "300"))
+_login_rate_limit = rate_limit(max_calls=_login_max_calls, window_seconds=_login_window)
+
 
 
 def _set_auth_cookie(response: Response, token: str) -> None:

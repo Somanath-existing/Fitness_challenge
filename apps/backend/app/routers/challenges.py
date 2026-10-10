@@ -16,6 +16,7 @@ Security:
 - creator-only delete enforced.
 - AI generation rate-limited: 10 req/hr/IP.
 """
+import os
 import logging
 import json
 import asyncio
@@ -42,9 +43,12 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/challenges", tags=["challenges"])
 
-# AI daily challenge is expensive — rate limit strictly
-_daily_challenge_rate_limit = rate_limit(max_calls=10, window_seconds=3600)
+# AI daily challenge rate limit (configurable via env)
+_daily_challenge_max_calls = int(os.getenv("DAILY_CHALLENGE_RATE_LIMIT_MAX", "20"))
+_daily_challenge_window = int(os.getenv("DAILY_CHALLENGE_RATE_LIMIT_WINDOW", "3600"))
+_daily_challenge_rate_limit = rate_limit(max_calls=_daily_challenge_max_calls, window_seconds=_daily_challenge_window)
 _challenge_rate_limit = rate_limit(max_calls=60, window_seconds=3600)
+
 
 
 @router.get(

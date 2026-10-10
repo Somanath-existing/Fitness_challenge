@@ -7,6 +7,7 @@ Security:
 - Ownership-enforced: users can only fetch their own insights.
 - Strictly rate-limited: 5 requests/hour/IP to protect against Groq API abuse.
 """
+import os
 import logging
 from datetime import datetime, timedelta
 
@@ -23,8 +24,11 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/users", tags=["insights"])
 
-# Strict rate limit — each call hits the Groq API (cost + abuse protection)
-_insights_rate_limit = rate_limit(max_calls=5, window_seconds=3600)
+# Strict rate limit — each call hits the Groq API (configurable via env)
+_insights_max_calls = int(os.getenv("INSIGHTS_RATE_LIMIT_MAX", "30"))
+_insights_window = int(os.getenv("INSIGHTS_RATE_LIMIT_WINDOW", "3600"))
+_insights_rate_limit = rate_limit(max_calls=_insights_max_calls, window_seconds=_insights_window)
+
 
 
 @router.get(

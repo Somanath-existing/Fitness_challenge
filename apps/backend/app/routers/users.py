@@ -10,6 +10,7 @@ Security:
 - Email is redacted from public profile responses.
 - Password strength enforced at schema level (min 8 chars, complexity).
 """
+import os
 import logging
 
 from fastapi import APIRouter, HTTPException, Depends, status
@@ -27,8 +28,11 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter(prefix="/api/users", tags=["users"])
 
-# Rate limit: 10 registrations per hour per IP — prevents mass account creation
-_register_rate_limit = rate_limit(max_calls=10, window_seconds=3600)
+# Rate limit: registrations per hour per IP (configurable via env)
+_register_max_calls = int(os.getenv("REGISTER_RATE_LIMIT_MAX", "10"))
+_register_window = int(os.getenv("REGISTER_RATE_LIMIT_WINDOW", "3600"))
+_register_rate_limit = rate_limit(max_calls=_register_max_calls, window_seconds=_register_window)
+
 
 
 @router.post(
