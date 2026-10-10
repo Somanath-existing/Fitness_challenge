@@ -75,6 +75,14 @@ jobs:
         with:
           node-version: 20
 
+      - name: Install frontend dependencies
+        working-directory: apps/frontend
+        run: npm install
+
+      - name: Build frontend
+        working-directory: apps/frontend
+        run: npm run build
+
       - name: Install Vercel CLI
         run: npm install --global vercel@latest
 
@@ -85,12 +93,12 @@ jobs:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
 
-      - name: Build Project Artifacts
+      - name: Prepare Vercel static output
         working-directory: apps/frontend
-        run: vercel build --prod --token=${{ secrets.VERCEL_TOKEN }}
-        env:
-          VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
-          VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
+        run: |
+          mkdir -p .vercel/output/static
+          cp -R dist/. .vercel/output/static/
+          printf '%s\n' '{"version":3,"routes":[{"src":"/(.*)","dest":"/index.html"}]}' > .vercel/output/config.json
 
       - name: Deploy Project Artifacts to Vercel
         working-directory: apps/frontend
