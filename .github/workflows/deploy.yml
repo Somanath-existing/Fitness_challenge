@@ -88,31 +88,40 @@ jobs:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
           VERCEL_PROJECT_ID: ${{ secrets.VERCEL_PROJECT_ID }}
 
-      - name: Load and validate production API URL
+      - name: Load and validate Render service URL
         run: |
-          node <<'NODE'
-          const fs = require('node:fs')
-          const apiUrl = process.env.VITE_API_URL?.trim()
+          node --input-type=module <<'NODE'
+          import fs from 'node:fs'
+          const serviceId = process.env.RENDER_SERVICE_ID
+          const apiKey = process.env.RENDER_API_KEY
 
-          if (!apiUrl) {
-            throw new Error('Set the VITE_API_URL GitHub Actions variable to the public Render backend URL')
+          if (!serviceId || !apiKey) {
+            throw new Error('RENDER_SERVICE_ID and RENDER_API_KEY GitHub Actions secrets are required')
           }
 
-          let parsedUrl
-          try {
-            parsedUrl = new URL(apiUrl)
-          } catch {
-            throw new Error('VITE_API_URL must be a valid HTTPS URL for the deployed backend')
+          const response = await fetch(
+            `https://api.render.com/v1/services/${encodeURIComponent(serviceId)}`,
+            { headers: { Authorization: `Bearer ${apiKey}` } },
+          )
+          if (!response.ok) {
+            throw new Error(`Could not retrieve Render service details (HTTP ${response.status})`)
           }
 
-          if (parsedUrl.protocol !== 'https:' || parsedUrl.hostname === 'localhost') {
-            throw new Error('VITE_API_URL must be an HTTPS URL for the deployed backend')
+          const service = await response.json()
+          const serviceUrl = service.serviceDetails?.url
+          if (!serviceUrl) {
+            throw new Error('The configured Render service does not provide a public URL')
           }
 
-          fs.appendFileSync(process.env.GITHUB_ENV, `VITE_API_URL=${apiUrl}\n`)
+          const parsedUrl = new URL(serviceUrl)
+          if (parsedUrl.protocol !== 'https:') {
+            throw new Error('The Render service URL must use HTTPS')
+          }
+          fs.appendFileSync(process.env.GITHUB_ENV, `VITE_API_URL=${parsedUrl.origin}\n`)
           NODE
         env:
-          VITE_API_URL: ${{ vars.VITE_API_URL }}
+          RENDER_SERVICE_ID: ${{ secrets.RENDER_SERVICE_ID }}
+          RENDER_API_KEY: ${{ secrets.RENDER_API_KEY }}
 
       - name: Build frontend
         working-directory: apps/frontend
