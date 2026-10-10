@@ -5,7 +5,7 @@ A full-stack fitness tracking app. Log workouts, earn points, compete on a leade
 ---
 
 ## Table of Contents
-
+-[Live Demo](#live-demo)
 - [Features](#features)
 - [Tech Stack](#tech-stack)
 - [Project Structure](#project-structure)
@@ -20,6 +20,9 @@ A full-stack fitness tracking app. Log workouts, earn points, compete on a leade
 
 ---
 
+## Live Demo
+
+-https://fitness-challenge-rimy7w1ol-somanath-existings-projects.vercel.app
 ## Features
 
 - Log activities for 6 sports: Running, Walking, Cycling, Gym, Swimming, Steps
