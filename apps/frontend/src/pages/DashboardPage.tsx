@@ -202,21 +202,7 @@ export default function DashboardPage() {
   // Use backend-provided total, not the capped recent list
   const completedCount = (user as any).total_activities ?? recent_activities.length
 
-  // Estimate total active minutes from recent activities (sport-aware, capped per session)
-  const totalMinutes = recent_activities.reduce((sum, a) => {
-    if (a.sport === 'gym' || a.sport === 'swimming') {
-      const parts = String(a.raw_value).split(':')
-      const mins = parts.length === 2 ? parseInt(parts[0]) : parseInt(a.raw_value) || 0
-      return sum + Math.min(mins, 180) // cap at 3 hours per session
-    }
-    if (a.sport === 'steps') {
-      // ~1 min per 100 steps, capped at 120 mins
-      return sum + Math.min(Math.round((parseFloat(a.raw_value) || 0) / 100), 120)
-    }
-    // running/walking/cycling: ~6 min/km for running, capped at 180 mins
-    const km = parseFloat(a.raw_value) || 0
-    return sum + Math.min(Math.round(km * 6), 180)
-  }, 0)
+
 
 
   return (
@@ -282,9 +268,7 @@ export default function DashboardPage() {
             </span>
             <span className="text-xs font-bold text-gray-500">pts</span>
           </div>
-          <div className="text-xs text-gray-400 font-semibold">
-            ~{totalMinutes || 45} mins total movement
-          </div>
+
         </div>
       </div>
 
