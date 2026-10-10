@@ -25,93 +25,96 @@ function NavBar() {
   const navigate = useNavigate()
 
   return (
-    <header className="sticky top-0 z-50 bg-white/90 backdrop-blur-md border-b border-gray-100 shadow-sm">
-      <div className="max-w-5xl mx-auto px-4 h-14 flex items-center gap-4">
-        {/* Brand */}
-        <NavLink to="/" className="flex items-center gap-2 shrink-0">
-          <div className="w-8 h-8 rounded-xl bg-violet-600 flex items-center justify-center text-white text-sm font-bold shadow-md shadow-violet-200">
-            🏃
-          </div>
-          <span className="font-bold text-gray-900 text-base hidden sm:block">FitChallenge</span>
-        </NavLink>
+    <>
+      <header className="sticky top-0 z-40 bg-white/95 backdrop-blur-md border-b border-gray-100 shadow-sm">
+        <div className="max-w-5xl mx-auto px-3 sm:px-4 h-14 flex items-center justify-between gap-2 sm:gap-4">
+          {/* Brand */}
+          <NavLink to="/" className="flex items-center gap-2 shrink-0">
+            <div className="w-8 h-8 rounded-xl bg-violet-600 flex items-center justify-center text-white text-sm font-bold shadow-md shadow-violet-200">
+              🏃
+            </div>
+            <span className="font-bold text-gray-900 text-sm sm:text-base">FitChallenge</span>
+          </NavLink>
 
-        {/* Desktop Nav links */}
-        <nav className="hidden md:flex items-center gap-1 flex-1 ml-2">
-          {NAV_ITEMS.map(item => (
-            <NavLink
-              key={item.to}
-              to={item.to}
-              end={item.to === '/'}
-              className={({ isActive }) =>
-                `px-3 py-1.5 rounded-xl text-sm font-medium transition-all duration-200 flex items-center gap-1.5 ${
-                  isActive
-                    ? 'bg-violet-100 text-violet-700 font-semibold'
-                    : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100'
-                }`
-              }
-            >
-              <span>{item.icon}</span>
-              {item.label}
-            </NavLink>
-          ))}
-        </nav>
-
-        {/* User info */}
-        <div className="ml-auto flex items-center gap-2 sm:gap-3">
-          {firstName ? (
-            <>
-              <div className="hidden sm:flex flex-col items-end">
-                <span className="text-sm font-semibold text-gray-800 flex items-center gap-1">
-                  {firstName}
-                  {username && <span className="text-violet-500 font-mono text-xs">(@{username})</span>}
-                </span>
-                <span className="text-xs text-gray-400">{totalPoints.toLocaleString()} pts</span>
-              </div>
-              {/* Avatar circle */}
-              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-violet-500 to-purple-700 flex items-center justify-center text-white text-sm font-bold shadow shrink-0">
-                {firstName[0]}
-              </div>
-              <button
-                onClick={async () => {
-                  try { await logoutUser() } catch { /* ignore */ }
-                  clearUser()
-                  navigate('/register')
-                }}
-                title="Sign out"
-                className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-semibold text-rose-600 bg-rose-50 hover:bg-rose-100 transition-colors shrink-0"
+          {/* Desktop Nav links */}
+          <nav className="hidden md:flex items-center gap-1 flex-1 ml-4">
+            {NAV_ITEMS.map(item => (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                end={item.to === '/'}
+                className={({ isActive }) =>
+                  `px-3 py-1.5 rounded-xl text-sm font-medium transition-all duration-200 flex items-center gap-1.5 ${
+                    isActive
+                      ? 'bg-violet-100 text-violet-700 font-semibold'
+                      : 'text-gray-500 hover:text-gray-900 hover:bg-gray-100'
+                  }`
+                }
               >
-                <span>🚪</span>
-                <span className="hidden sm:inline">Sign out</span>
-              </button>
-            </>
-          ) : (
-            <NavLink
-              to="/register"
-              className="btn-primary !py-1.5 !px-4 !text-sm !rounded-xl !shadow-md !shadow-violet-200"
-            >
-              Get Started
-            </NavLink>
-          )}
-        </div>
-      </div>
+                <span>{item.icon}</span>
+                {item.label}
+              </NavLink>
+            ))}
+          </nav>
 
-      {/* Mobile bottom nav */}
-      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white border-t border-gray-100 shadow-[0_-4px_20px_rgba(0,0,0,0.06)] flex z-50 pb-safe">
+          {/* User info & Sign out button (visible on mobile and desktop) */}
+          <div className="flex items-center gap-2 sm:gap-3 shrink-0">
+            {firstName ? (
+              <>
+                <div className="hidden sm:flex flex-col items-end">
+                  <span className="text-sm font-semibold text-gray-800 flex items-center gap-1">
+                    {firstName}
+                    {username && <span className="text-violet-500 font-mono text-xs">(@{username})</span>}
+                  </span>
+                  <span className="text-xs text-gray-400">{totalPoints.toLocaleString()} pts</span>
+                </div>
+                {/* Avatar circle */}
+                <div className="w-8 h-8 rounded-full bg-gradient-to-br from-violet-500 to-purple-700 flex items-center justify-center text-white text-sm font-bold shadow shrink-0">
+                  {firstName[0]}
+                </div>
+                {/* Sign out button */}
+                <button
+                  onClick={async () => {
+                    try { await logoutUser() } catch { /* ignore */ }
+                    clearUser()
+                    navigate('/register')
+                  }}
+                  title="Sign out"
+                  className="flex items-center gap-1 px-2.5 sm:px-3 py-1.5 rounded-xl text-xs font-semibold text-rose-600 bg-rose-50 hover:bg-rose-100 active:bg-rose-200 transition-colors shrink-0 border border-rose-100"
+                >
+                  <span>🚪</span>
+                  <span>Sign out</span>
+                </button>
+              </>
+            ) : (
+              <NavLink
+                to="/register"
+                className="btn-primary !py-1.5 !px-4 !text-sm !rounded-xl !shadow-md !shadow-violet-200"
+              >
+                Get Started
+              </NavLink>
+            )}
+          </div>
+        </div>
+      </header>
+
+      {/* Mobile bottom nav - placed OUTSIDE header so fixed bottom-0 docks to mobile viewport */}
+      <nav className="md:hidden fixed bottom-0 left-0 right-0 bg-white/95 backdrop-blur-md border-t border-gray-100 shadow-[0_-4px_20px_rgba(0,0,0,0.08)] flex z-50 pb-[max(env(safe-area-inset-bottom),0.5rem)]">
         {NAV_ITEMS.map(item => (
           <NavLink
             key={item.to}
             to={item.to}
             end={item.to === '/'}
             className={({ isActive }) =>
-              `flex-1 flex flex-col items-center py-2.5 text-[10px] font-medium transition-all duration-200 gap-0.5 ${
-                isActive ? 'text-violet-600' : 'text-gray-400'
+              `flex-1 flex flex-col items-center py-2 text-[10px] font-medium transition-all duration-200 gap-0.5 ${
+                isActive ? 'text-violet-600 font-semibold' : 'text-gray-400'
               }`
             }
           >
             {({ isActive }) => (
               <>
                 <div className={`w-10 h-7 flex items-center justify-center rounded-xl transition-all duration-200 ${
-                  isActive ? 'bg-violet-100' : ''
+                  isActive ? 'bg-violet-100 shadow-sm' : ''
                 }`}>
                   <span className="text-lg leading-none">{item.icon}</span>
                 </div>
@@ -121,7 +124,7 @@ function NavBar() {
           </NavLink>
         ))}
       </nav>
-    </header>
+    </>
   )
 }
 
