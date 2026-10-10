@@ -1,15 +1,16 @@
-import { useState } from 'react'
-import { useQuery } from '@tanstack/react-query'
+import { useState, useEffect } from 'react'
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query'
 import { useNavigate } from 'react-router-dom'
 import {
   LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip,
   ResponsiveContainer, PieChart, Pie, Cell,
 } from 'recharts'
 import ActivityCalendar from 'react-activity-calendar'
-import { getDashboard, getInsights } from '../api/endpoints'
+import { getDashboard, getInsights, getActivities, recomputeStreaks } from '../api/endpoints'
 import { useUserStore } from '../stores/userStore'
 import TierBadge from '../components/TierBadge'
 import StreakBadge from '../components/StreakBadge'
+import { formatActivityDate } from '../utils/date'
 import type { Tier } from '../types'
 
 const SPORT_COLORS: Record<string, string> = {
@@ -96,7 +97,29 @@ export default function DashboardPage() {
   const userId = useUserStore((s) => s.userId)
   const firstName = useUserStore((s) => s.firstName)
   const navigate = useNavigate()
+  const queryClient = useQueryClient()
   const [activeSport, setActiveSport] = useState<string | null>(null)
+  const [showAllActivities, setShowAllActivities] = useState(false)
+  const [activityPage, setActivityPage] = useState(0)
+  const PAGE_SIZE = 20
+
+  // Auto-recompute streaks once per session to fix seeded users
+  const recomputeMutation = useMutation({
+    mutationFn: recomputeStreaks,
+    onSuccess: () => queryClient.invalidateQueries({ queryKey: ['dashboard', userId] }),
+  })
+  useEffect(() => {
+    if (userId) recomputeMutation.mutate()
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [userId])
+
+  // Paginated full activity list (only fetched when panel is open)
+  const { data: allActivitiesData, isFetching: loadingMore } = useQuery({
+    queryKey: ['all-activities', userId, activityPage],
+    queryFn: () => getActivities({ limit: PAGE_SIZE, offset: activityPage * PAGE_SIZE }),
+    enabled: !!userId && showAllActivities,
+    staleTime: 30_000,
+  })
 
   const { data, isLoading, error } = useQuery({
     queryKey: ['dashboard', userId],
@@ -150,27 +173,51 @@ export default function DashboardPage() {
 
   const { user, sport_breakdown, weekly_trend, heatmap, recent_activities, goal_progress } = data
 
-  const calendarData = heatmap.map(entry => ({
-    date: entry.date,
-    count: Math.min(Math.ceil(entry.points / 100), 4),
-    level: Math.min(Math.ceil(entry.points / 100), 4) as 0 | 1 | 2 | 3 | 4,
-  }))
+  // Build a fixed Jan 1 – Dec 31 calendar for the current year.
+  // This keeps the "X active days in YYYY" label correct (library uses first date's year).
+  // The rolling 365-day backend data is mapped onto the fixed year range.
+  const heatmapMap = new Map<string, number>()
+  heatmap.forEach(h => heatmapMap.set(h.date, h.points))
+
+  const currentYear = new Date().getFullYear()
+  const calendarData: { date: string; count: number; level: 0 | 1 | 2 | 3 | 4 }[] = []
+  for (let month = 0; month < 12; month++) {
+    const daysInMonth = new Date(currentYear, month + 1, 0).getDate()
+    for (let day = 1; day <= daysInMonth; day++) {
+      const dateStr = `${currentYear}-${String(month + 1).padStart(2, '0')}-${String(day).padStart(2, '0')}`
+      const pts = heatmapMap.get(dateStr) ?? 0
+      let level: 0 | 1 | 2 | 3 | 4 = 0
+      if (pts >= 1000) level = 4
+      else if (pts >= 500) level = 3
+      else if (pts >= 200) level = 2
+      else if (pts > 0) level = 1
+      calendarData.push({ date: dateStr, count: pts > 0 ? 1 : 0, level })
+    }
+  }
 
   const filteredActivities = activeSport
     ? recent_activities.filter(a => a.sport === activeSport)
     : recent_activities
 
-  const completedCount = recent_activities.length
+  // Use backend-provided total, not the capped recent list
+  const completedCount = (user as any).total_activities ?? recent_activities.length
+
+  // Estimate total active minutes from recent activities (sport-aware, capped per session)
   const totalMinutes = recent_activities.reduce((sum, a) => {
     if (a.sport === 'gym' || a.sport === 'swimming') {
-      const parts = a.raw_value.split(':')
+      const parts = String(a.raw_value).split(':')
       const mins = parts.length === 2 ? parseInt(parts[0]) : parseInt(a.raw_value) || 0
-      return sum + mins
+      return sum + Math.min(mins, 180) // cap at 3 hours per session
     }
-    // Estimated mins from running / walking
+    if (a.sport === 'steps') {
+      // ~1 min per 100 steps, capped at 120 mins
+      return sum + Math.min(Math.round((parseFloat(a.raw_value) || 0) / 100), 120)
+    }
+    // running/walking/cycling: ~6 min/km for running, capped at 180 mins
     const km = parseFloat(a.raw_value) || 0
-    return sum + Math.round(km * 6)
+    return sum + Math.min(Math.round(km * 6), 180)
   }, 0)
+
 
   return (
     <div className="max-w-4xl mx-auto px-4 py-6 sm:py-8 space-y-6">
@@ -369,14 +416,16 @@ export default function DashboardPage() {
           <div className="overflow-x-auto pb-1">
             <ActivityCalendar
               data={calendarData}
+              colorScheme="light"
               theme={{
-                light: ['#f5f3ff', '#ddd6fe', '#c4b5fd', '#a78bfa', '#7c3aed'],
+                light: ['#f3f4f6', '#ddd6fe', '#c4b5fd', '#a78bfa', '#7c3aed'],
+                dark: ['#f3f4f6', '#ddd6fe', '#c4b5fd', '#a78bfa', '#7c3aed'],
               }}
               labels={{
                 legend: { less: 'Less', more: 'More' },
                 months: ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'],
                 weekdays: ['Sun','Mon','Tue','Wed','Thu','Fri','Sat'],
-                totalCount: '{{count}} activities in {{year}}',
+                totalCount: '{{count}} active days in {{year}}',
               }}
               fontSize={11}
               blockSize={12}
@@ -408,12 +457,20 @@ export default function DashboardPage() {
                 )}
               </h3>
             </div>
-            <button
-              onClick={() => navigate('/log')}
-              className="text-xs text-violet-600 font-bold hover:underline"
-            >
-              + Log New
-            </button>
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => { setShowAllActivities(true); setActivityPage(0) }}
+                className="text-xs text-violet-600 font-bold hover:underline"
+              >
+                See All →
+              </button>
+              <button
+                onClick={() => navigate('/log')}
+                className="text-xs text-violet-600 font-bold hover:underline"
+              >
+                + Log New
+              </button>
+            </div>
           </div>
           {filteredActivities.length === 0 ? (
             <div className="flex flex-col items-center justify-center py-10 text-gray-400 gap-2">
@@ -432,7 +489,7 @@ export default function DashboardPage() {
                       {a.title || `${a.sport.toUpperCase()} workout`}
                     </div>
                     <div className="text-xs text-gray-400">
-                      {a.raw_value} · {new Date(a.logged_at).toLocaleDateString()}
+                      {a.raw_value} · {formatActivityDate(a.logged_at, user.timezone)}
                     </div>
                   </div>
                   <div className="text-xs font-black text-violet-700 tabular-nums shrink-0 bg-violet-100 rounded-xl px-2.5 py-1">
@@ -465,6 +522,135 @@ export default function DashboardPage() {
           </div>
         </div>
       )}
+
+      {/* ── See All Activities Slide-over Panel ── */}
+      {showAllActivities && (
+        <div className="fixed inset-0 z-50 flex">
+          {/* Backdrop */}
+          <div
+            className="absolute inset-0 bg-black/40 backdrop-blur-sm"
+            onClick={() => setShowAllActivities(false)}
+          />
+          {/* Panel */}
+          <div className="relative ml-auto w-full max-w-lg h-full bg-white shadow-2xl flex flex-col">
+            {/* Header */}
+            <div className="flex items-center justify-between px-6 py-5 border-b border-gray-100">
+              <div>
+                <p className="text-xs font-bold text-violet-600 uppercase tracking-widest">Workout Log</p>
+                <h2 className="text-xl font-extrabold text-gray-900">All Activities</h2>
+                {allActivitiesData && (
+                  <p className="text-xs text-gray-400 mt-0.5">{allActivitiesData.total} total workouts</p>
+                )}
+              </div>
+              <button
+                onClick={() => setShowAllActivities(false)}
+                className="w-9 h-9 rounded-2xl bg-gray-100 hover:bg-gray-200 flex items-center justify-center text-gray-500 hover:text-gray-800 transition-colors font-bold text-lg"
+              >
+                ✕
+              </button>
+            </div>
+
+            {/* Activity list */}
+            <div className="flex-1 overflow-y-auto p-4 space-y-2">
+              {loadingMore && activityPage === 0 ? (
+                <div className="space-y-2">
+                  {[...Array(5)].map((_, i) => (
+                    <div key={i} className="h-16 bg-gray-50 rounded-2xl animate-pulse" />
+                  ))}
+                </div>
+              ) : allActivitiesData?.activities.length === 0 ? (
+                <div className="flex flex-col items-center justify-center py-16 text-gray-400 gap-2">
+                  <span className="text-4xl">🏃‍♂️</span>
+                  <span className="text-sm">No activities yet — go log one!</span>
+                </div>
+              ) : (
+                <>
+                  {/* Accumulated pages */}
+                  {Array.from({ length: activityPage + 1 }).map((_, pageIdx) => (
+                    <AllActivitiesPage
+                      key={pageIdx}
+                      userId={userId!}
+                      page={pageIdx}
+                      pageSize={PAGE_SIZE}
+                      timeZone={user.timezone}
+                    />
+                  ))}
+
+                  {/* Load More */}
+                  {allActivitiesData && (activityPage + 1) * PAGE_SIZE < allActivitiesData.total && (
+                    <button
+                      onClick={() => setActivityPage(p => p + 1)}
+                      disabled={loadingMore}
+                      className="w-full py-3 rounded-2xl bg-violet-50 hover:bg-violet-100 text-violet-700 text-sm font-bold border border-violet-200 transition-colors mt-2"
+                    >
+                      {loadingMore ? 'Loading…' : `Load More (${allActivitiesData.total - (activityPage + 1) * PAGE_SIZE} remaining)`}
+                    </button>
+                  )}
+                </>
+              )}
+            </div>
+
+            {/* Footer */}
+            <div className="px-6 py-4 border-t border-gray-100">
+              <button
+                onClick={() => navigate('/log')}
+                className="w-full py-3 rounded-2xl bg-violet-600 hover:bg-violet-700 text-white text-sm font-bold transition-colors shadow-md shadow-violet-200"
+              >
+                + Log New Workout
+              </button>
+            </div>
+          </div>
+        </div>
+      )}
     </div>
+  )
+}
+
+// Sub-component to render one page of activities (avoids re-fetching earlier pages)
+function AllActivitiesPage({
+  userId,
+  page,
+  pageSize,
+  timeZone,
+}: {
+  userId: string
+  page: number
+  pageSize: number
+  timeZone: string
+}) {
+  const SPORT_EMOJI: Record<string, string> = {
+    running: '🏃‍♂️', walking: '🚶‍♀️', cycling: '🚴‍♂️',
+    gym: '🏋️‍♂️', swimming: '🏊‍♂️', steps: '👣',
+  }
+
+  const { data } = useQuery({
+    queryKey: ['all-activities', userId, page],
+    queryFn: () => getActivities({ limit: pageSize, offset: page * pageSize }),
+    staleTime: 30_000,
+  })
+
+  if (!data) return null
+
+  return (
+    <>
+      {data.activities.map(a => (
+        <div key={a.id} className="flex items-center gap-3 p-3 bg-gray-50/70 rounded-2xl hover:bg-violet-50/40 transition-colors">
+          <div className="w-10 h-10 rounded-xl bg-white border border-gray-100 flex items-center justify-center text-xl shrink-0 shadow-sm">
+            {SPORT_EMOJI[a.sport] ?? '🏃'}
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="text-sm font-bold text-gray-900 truncate">
+              {a.title || `${a.sport.toUpperCase()} workout`}
+            </div>
+            <div className="text-xs text-gray-400">
+              {a.raw_value} · {formatActivityDate(a.logged_at, timeZone)}
+            </div>
+          </div>
+          <div className="text-xs font-black text-violet-700 tabular-nums shrink-0 bg-violet-100 rounded-xl px-2.5 py-1">
+            +{a.points_awarded} pts
+          </div>
+        </div>
+      ))}
+    </>
   )
 }

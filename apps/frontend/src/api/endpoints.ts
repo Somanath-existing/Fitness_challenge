@@ -182,3 +182,32 @@ export const deleteChallenge = async (challengeId: string) => {
   // user_id removed — server uses JWT
   await api.delete(`/challenges/${challengeId}`)
 }
+
+// ── Activity history (paginated) ─────────────────────────────────────────
+
+export interface ActivityEntry {
+  id: string
+  sport: string
+  metric_type: string
+  raw_value: string
+  points_awarded: number
+  title?: string
+  notes?: string
+  logged_at: string
+  source: string
+}
+
+export const getActivities = async (params: {
+  limit?: number
+  offset?: number
+}): Promise<{ activities: ActivityEntry[]; total: number; limit: number; offset: number }> => {
+  const r = await api.get('/activities', { params })
+  return r.data
+}
+
+// ── Admin ─────────────────────────────────────────────────────────────────
+
+export const recomputeStreaks = async (): Promise<{ message: string }> => {
+  const r = await api.post('/admin/recompute-streaks')
+  return r.data
+}

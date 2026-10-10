@@ -121,8 +121,10 @@ def seed():
                     except ValueError:
                         continue
 
+                    # Use hours 6-14 UTC so activity stays on same calendar day
+                    # in ALL timezones we seed (IST=+5:30 → 14 UTC = 19:30 IST, same day)
                     logged_at = day.replace(
-                        hour=random.randint(6, 20),
+                        hour=random.randint(6, 14),
                         minute=random.randint(0, 59),
                         second=0,
                         microsecond=0,
@@ -140,6 +142,16 @@ def seed():
                     )
                     session.add(activity)
                     user.total_points += result["points"]
+
+                    # Compute streak properly for each activity
+                    new_streak, new_last_date = compute_streak(
+                        last_active_date=user.last_active_date,
+                        current_streak=user.current_streak,
+                        logged_at=logged_at,
+                        user_timezone=user_data["timezone"],
+                    )
+                    user.current_streak = new_streak
+                    user.last_active_date = new_last_date
 
             # Compute streak (simplified — uses most recent dates)
             session.flush()

@@ -6,14 +6,22 @@ import { useNavigate, useSearchParams } from 'react-router-dom'
 import type { UserChallenge } from '../types'
 
 const DIFFICULTY_CONFIG = {
-  easy:   { label: 'Easy',   classes: 'bg-emerald-50 text-emerald-700 border-emerald-200 font-semibold' },
+  easy: { label: 'Easy', classes: 'bg-emerald-50 text-emerald-700 border-emerald-200 font-semibold' },
   medium: { label: 'Medium', classes: 'bg-amber-50 text-amber-700 border-amber-200 font-semibold' },
-  hard:   { label: 'Hard',   classes: 'bg-rose-50 text-rose-700 border-rose-200 font-semibold' },
+  hard: { label: 'Hard', classes: 'bg-rose-50 text-rose-700 border-rose-200 font-semibold' },
 }
 
 const SPORT_EMOJI: Record<string, string> = {
   running: '🏃‍♂️', walking: '🚶‍♀️', cycling: '🚴‍♂️',
   gym: '🏋️‍♂️', swimming: '🏊‍♂️', steps: '👣',
+}
+
+function getMetricUnit(metricType?: string): string {
+  if (metricType === 'distance_km') return 'km'
+  if (metricType === 'count') return 'steps'
+  if (metricType === 'duration_minsec') return 'min'
+  if (metricType === 'points') return 'pts'
+  return ''
 }
 
 function DailyCard({ userId }: { userId: string }) {
@@ -45,7 +53,7 @@ function DailyCard({ userId }: { userId: string }) {
 
   const diff = DIFFICULTY_CONFIG[data.difficulty as keyof typeof DIFFICULTY_CONFIG] ?? DIFFICULTY_CONFIG.medium
   const target = typeof data.metric?.target === 'number' ? data.metric.target : parseFloat(String(data.metric?.target)) || 1
-  const metricLabel = data.metric?.type === 'distance_km' ? 'km' : data.metric?.type === 'count' ? 'steps' : 'min'
+  const metricLabel = getMetricUnit(data.metric?.type)
   const targetDisplay = `${target} ${metricLabel}`
 
   const myProgress: number = (data as any).my_progress ?? 0
@@ -54,11 +62,10 @@ function DailyCard({ userId }: { userId: string }) {
   const isCompleted = myStatus === 'completed' || myProgress >= target
 
   return (
-    <div className={`bg-white rounded-3xl p-6 sm:p-7 shadow-sm border transition-all ${
-      isCompleted
+    <div className={`bg-white rounded-3xl p-6 sm:p-7 shadow-sm border transition-all ${isCompleted
         ? 'border-emerald-200 bg-gradient-to-br from-white via-emerald-50/20 to-emerald-50/40 shadow-emerald-100'
         : 'border-gray-100 hover:border-violet-200'
-    }`}>
+      }`}>
       <div className="flex items-center justify-between mb-4">
         <div className="flex items-center gap-2">
           <span className="w-2.5 h-2.5 rounded-full bg-violet-600 animate-pulse" />
@@ -114,11 +121,10 @@ function DailyCard({ userId }: { userId: string }) {
         </div>
         <div className="w-full bg-gray-100 rounded-full h-3 overflow-hidden">
           <div
-            className={`h-3 rounded-full transition-all duration-700 ${
-              isCompleted
+            className={`h-3 rounded-full transition-all duration-700 ${isCompleted
                 ? 'bg-gradient-to-r from-emerald-500 to-green-500'
                 : 'bg-gradient-to-r from-violet-600 to-indigo-500'
-            }`}
+              }`}
             style={{ width: `${progressPct}%` }}
           />
         </div>
@@ -138,11 +144,13 @@ function DailyCard({ userId }: { userId: string }) {
 
       {!isCompleted && (
         <button
-          onClick={() =>
+          onClick={() => {
+            const isPoints = data.metric?.type === 'points'
             navigate(
-              `/log?sport=${data.sport || 'running'}&title=${encodeURIComponent(data.title)}&target=${target}`
+              `/log?sport=${data.sport || 'running'}&title=${encodeURIComponent(data.title)}${isPoints ? `&points_target=${target}` : `&target=${target}`
+              }`
             )
-          }
+          }}
           className="w-full mt-2 py-3 rounded-2xl bg-violet-600 hover:bg-violet-700 active:scale-[0.99] text-white text-xs font-bold transition-all flex items-center justify-center gap-1.5 shadow-md shadow-violet-200"
         >
           <span>⚡</span> Log Workout for Today's Quest →
@@ -267,11 +275,10 @@ function CreateChallengeForm({
                     key={f.user_id}
                     type="button"
                     onClick={() => toggleFriend(f.user_id)}
-                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all ${
-                      isSelected
+                    className={`flex items-center gap-1.5 px-3 py-1.5 rounded-xl text-xs font-semibold border transition-all ${isSelected
                         ? 'bg-violet-600 border-violet-600 text-white shadow-sm shadow-violet-200'
                         : 'bg-white border-gray-200 text-gray-700 hover:border-violet-300'
-                    }`}
+                      }`}
                   >
                     <span>{isSelected ? '✓' : '👤'}</span>
                     <span>{f.first_name}</span>
@@ -366,10 +373,17 @@ function CreateChallengeForm({
           <select
             className="fit-input !py-3 bg-white"
             value={form.sport}
-            onChange={e => setForm({ ...form, sport: e.target.value })}
+            onChange={e => {
+              const sp = e.target.value
+              let nextMetric = 'points'
+              if (sp === 'running' || sp === 'walking' || sp === 'cycling') nextMetric = 'distance_km'
+              else if (sp === 'gym' || sp === 'swimming') nextMetric = 'duration_minsec'
+              else if (sp === 'steps') nextMetric = 'count'
+              setForm({ ...form, sport: sp, metric_type: nextMetric })
+            }}
           >
             <option value="">Any sport</option>
-            {['running','walking','cycling','gym','swimming','steps'].map(s => (
+            {['running', 'walking', 'cycling', 'gym', 'swimming', 'steps'].map(s => (
               <option key={s} value={s}>{SPORT_EMOJI[s]} {s}</option>
             ))}
           </select>
@@ -381,22 +395,30 @@ function CreateChallengeForm({
             value={form.metric_type}
             onChange={e => setForm({ ...form, metric_type: e.target.value })}
           >
+            {(!form.sport || form.sport === 'running' || form.sport === 'walking' || form.sport === 'cycling') && (
+              <option value="distance_km">Distance (km)</option>
+            )}
+            {(!form.sport || form.sport === 'gym' || form.sport === 'swimming') && (
+              <option value="duration_minsec">Duration (min)</option>
+            )}
+            {(!form.sport || form.sport === 'steps') && (
+              <option value="count">Count / Steps</option>
+            )}
             <option value="points">Points</option>
-            <option value="distance_km">Distance (km)</option>
-            <option value="duration_minsec">Duration (min)</option>
-            <option value="count">Count / Steps</option>
           </select>
         </div>
       </div>
 
       <div>
-        <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5">Target Value *</label>
+        <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5">
+          Target Value ({form.metric_type === 'points' ? 'Points' : form.metric_type === 'distance_km' ? 'km' : form.metric_type === 'duration_minsec' ? 'minutes' : 'steps'}) *
+        </label>
         <input
           type="number"
-          min={0.1}
-          step={0.1}
+          min={1}
+          step={form.metric_type === 'count' || form.metric_type === 'points' ? 1 : 0.1}
           className="fit-input !py-3"
-          placeholder="e.g. 10"
+          placeholder={form.metric_type === 'points' ? "e.g. 500 points" : form.metric_type === 'count' ? "e.g. 10000 steps" : "e.g. 10"}
           value={form.target_value}
           onChange={e => setForm({ ...form, target_value: e.target.value })}
         />
@@ -405,16 +427,15 @@ function CreateChallengeForm({
       <div>
         <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">Difficulty</label>
         <div className="flex gap-2">
-          {(['easy','medium','hard'] as const).map(d => (
+          {(['easy', 'medium', 'hard'] as const).map(d => (
             <button
               key={d}
               type="button"
               onClick={() => setForm({ ...form, difficulty: d })}
-              className={`flex-1 py-2 rounded-xl text-xs font-bold border transition-all capitalize ${
-                form.difficulty === d
+              className={`flex-1 py-2 rounded-xl text-xs font-bold border transition-all capitalize ${form.difficulty === d
                   ? DIFFICULTY_CONFIG[d].classes + ' ring-2 ring-violet-400'
                   : 'bg-white border-gray-200 text-gray-600 hover:border-gray-300'
-              }`}
+                }`}
             >
               {d}
             </button>
@@ -430,8 +451,8 @@ function CreateChallengeForm({
         {mutation.isPending
           ? 'Creating Challenge…'
           : selectedFriendIds.length > 0
-          ? `Create & Invite ${selectedFriendIds.length} Friend${selectedFriendIds.length > 1 ? 's' : ''}`
-          : 'Create Challenge'}
+            ? `Create & Invite ${selectedFriendIds.length} Friend${selectedFriendIds.length > 1 ? 's' : ''}`
+            : 'Create Challenge'}
       </button>
     </div>
   )
@@ -530,11 +551,10 @@ export default function ChallengesPage() {
 
       {feedback && (
         <div
-          className={`text-sm rounded-2xl p-4 flex items-center gap-3 shadow-sm border ${
-            feedback.type === 'ok'
+          className={`text-sm rounded-2xl p-4 flex items-center gap-3 shadow-sm border ${feedback.type === 'ok'
               ? 'bg-emerald-50 border-emerald-200 text-emerald-800'
               : 'bg-rose-50 border-rose-200 text-rose-800'
-          }`}
+            }`}
         >
           <span className="text-xl">{feedback.type === 'ok' ? '🎉' : '⚠️'}</span>
           <span className="font-medium flex-1">{feedback.msg}</span>
@@ -601,7 +621,7 @@ export default function ChallengesPage() {
 
                 <div className="flex flex-wrap gap-2 text-xs">
                   <span className="bg-white text-gray-700 px-3 py-1 rounded-full border border-gray-200 font-medium">
-                    🎯 Target: {ch.target_value} {ch.metric_type === 'distance_km' ? 'km' : ch.metric_type === 'count' ? 'steps' : ch.metric_type}
+                    🎯 Target: {ch.target_value} {getMetricUnit(ch.metric_type)}
                   </span>
                 </div>
 
@@ -644,11 +664,19 @@ export default function ChallengesPage() {
               return (
                 <div
                   key={ch.id}
-                  onClick={() =>
-                    navigate(
-                      `/log?sport=${ch.sport || 'running'}&title=${encodeURIComponent(ch.title)}&target=${ch.target_value}`
-                    )
-                  }
+                  onClick={() => {
+                    const isPoints = ch.metric_type === 'points'
+                    const query = new URLSearchParams({
+                      sport: ch.sport || 'running',
+                      title: ch.title,
+                      target: String(ch.target_value),
+                      metric_type: ch.metric_type,
+                    })
+                    if (isPoints) {
+                      query.set('points_target', String(ch.target_value))
+                    }
+                    navigate(`/log?${query.toString()}`)
+                  }}
                   className="bg-gray-50/70 hover:bg-violet-50/40 border border-gray-100 hover:border-violet-200 rounded-2xl p-4 sm:p-5 space-y-3 cursor-pointer transition-all shadow-xs"
                 >
                   <div className="flex items-start justify-between gap-2">
@@ -675,37 +703,48 @@ export default function ChallengesPage() {
                       )}
 
                       {ch.is_creator && (
-                        confirmDeleteId === ch.id ? (
-                          <div className="flex items-center gap-1.5 bg-rose-50 border border-rose-200 rounded-xl px-2 py-1">
-                            <span className="text-[11px] font-bold text-rose-700">Delete?</span>
+                        <div onClick={(e) => e.stopPropagation()} className="shrink-0">
+                          {confirmDeleteId === ch.id ? (
+                            <div className="flex items-center gap-1.5 bg-rose-50 border border-rose-200 rounded-xl px-2 py-1">
+                              <span className="text-[11px] font-bold text-rose-700">Delete?</span>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  deleteMutation.mutate(ch.id)
+                                }}
+                                disabled={deleteMutation.isPending}
+                                className="px-2 py-0.5 bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white rounded-lg text-xs font-bold transition-colors"
+                              >
+                                Yes
+                              </button>
+                              <button
+                                type="button"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  setConfirmDeleteId(null)
+                                }}
+                                className="px-1.5 py-0.5 bg-white text-gray-600 hover:text-gray-900 rounded-lg text-xs font-semibold border border-gray-200"
+                              >
+                                Cancel
+                              </button>
+                            </div>
+                          ) : (
                             <button
                               type="button"
-                              onClick={() => deleteMutation.mutate(ch.id)}
-                              disabled={deleteMutation.isPending}
-                              className="px-2 py-0.5 bg-rose-600 hover:bg-rose-700 disabled:opacity-50 text-white rounded-lg text-xs font-bold transition-colors"
+                              onClick={(e) => {
+                                e.stopPropagation()
+                                setConfirmDeleteId(ch.id)
+                              }}
+                              title="Delete challenge"
+                              className="p-1.5 text-gray-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all"
                             >
-                              Yes
+                              <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                              </svg>
                             </button>
-                            <button
-                              type="button"
-                              onClick={() => setConfirmDeleteId(null)}
-                              className="px-1.5 py-0.5 bg-white text-gray-600 hover:text-gray-900 rounded-lg text-xs font-semibold border border-gray-200"
-                            >
-                              Cancel
-                            </button>
-                          </div>
-                        ) : (
-                          <button
-                            type="button"
-                            onClick={() => setConfirmDeleteId(ch.id)}
-                            title="Delete challenge"
-                            className="p-1.5 text-gray-400 hover:text-rose-600 hover:bg-rose-50 rounded-xl transition-all"
-                          >
-                            <svg className="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
-                            </svg>
-                          </button>
-                        )
+                          )}
+                        </div>
                       )}
                     </div>
                   </div>
@@ -719,7 +758,7 @@ export default function ChallengesPage() {
                     <div className="flex justify-between text-xs text-gray-500 mb-1.5 font-semibold">
                       <span>Your Progress</span>
                       <span className="text-gray-900 font-bold">
-                        {ch.my_progress.toFixed(1)} / {ch.target_value} {ch.metric_type === 'distance_km' ? 'km' : ch.metric_type === 'count' ? 'steps' : ''}
+                        {ch.my_progress.toFixed(ch.metric_type === 'points' || ch.metric_type === 'count' ? 0 : 1)} / {ch.target_value} {getMetricUnit(ch.metric_type)}
                       </span>
                     </div>
                     <div className="w-full bg-gray-200 rounded-full h-2.5 overflow-hidden">
@@ -740,11 +779,10 @@ export default function ChallengesPage() {
                         {ch.participants.map(p => (
                           <div
                             key={p.user_id}
-                            className={`flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-semibold border ${
-                              p.user_id === userId
+                            className={`flex items-center gap-1.5 px-3 py-1 rounded-xl text-xs font-semibold border ${p.user_id === userId
                                 ? 'bg-violet-50 border-violet-200 text-violet-700'
                                 : 'bg-white border-gray-200 text-gray-700'
-                            }`}
+                              }`}
                           >
                             <span>{p.status === 'completed' ? '🏆' : p.status === 'accepted' ? '🏃' : '⏳'}</span>
                             <span>{p.first_name}</span>
@@ -762,9 +800,18 @@ export default function ChallengesPage() {
                       type="button"
                       onClick={(e) => {
                         e.stopPropagation()
-                        navigate(
-                          `/log?sport=${ch.sport || 'running'}&title=${encodeURIComponent(ch.title)}&target=${ch.target_value}`
-                        )
+                        const isPoints = ch.metric_type === 'points'
+                        const query = new URLSearchParams({
+                          sport: ch.sport || 'running',
+                          title: ch.title,
+                          metric_type: ch.metric_type,
+                        })
+                        if (isPoints) {
+                          query.set('points_target', String(ch.target_value))
+                        } else {
+                          query.set('target', String(ch.target_value))
+                        }
+                        navigate(`/log?${query.toString()}`)
                       }}
                       className="text-xs font-bold text-violet-600 hover:text-violet-700 hover:underline flex items-center gap-1"
                     >

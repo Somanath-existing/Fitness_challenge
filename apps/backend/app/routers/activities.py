@@ -50,6 +50,52 @@ router = APIRouter(prefix="/api/activities", tags=["activities"])
 _activity_rate_limit = rate_limit(max_calls=60, window_seconds=3600)
 
 
+@router.get("", tags=["activities"])
+def list_activities(
+    limit: int = 20,
+    offset: int = 0,
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+):
+    """
+    Return paginated activity history for the authenticated user.
+    Ordered newest-first.
+    """
+    activities = session.exec(
+        select(Activity)
+        .where(Activity.user_id == current_user.id)
+        .order_by(Activity.logged_at.desc())  # type: ignore[union-attr]
+        .offset(offset)
+        .limit(limit)
+    ).all()
+
+    total = session.exec(
+        select(func.count(Activity.id)).where(Activity.user_id == current_user.id)
+    ).one()
+
+    return {
+        "activities": [
+            {
+                "id": a.id,
+                "sport": a.sport,
+                "metric_type": a.metric_type,
+                "raw_value": a.raw_value,
+                "points_awarded": a.points_awarded,
+                "title": a.title,
+                "notes": a.notes,
+                "logged_at": a.logged_at.isoformat(),
+                "source": a.source,
+            }
+            for a in activities
+        ],
+        "total": total,
+        "limit": limit,
+        "offset": offset,
+    }
+
+
+
+
 @router.post(
     "",
     status_code=status.HTTP_201_CREATED,

@@ -83,9 +83,14 @@ def _build_dashboard_payload(
             day_str = a.logged_at.strftime("%Y-%m-%d")
             daily[day_str] += a.points_awarded
 
+    today = datetime.utcnow().date()
+    start_date = today - timedelta(days=364)
     heatmap = [
-        HeatmapItem(date=day, points=pts)
-        for day, pts in sorted(daily.items())
+        HeatmapItem(
+            date=(start_date + timedelta(days=i)).strftime("%Y-%m-%d"),
+            points=daily.get((start_date + timedelta(days=i)).strftime("%Y-%m-%d"), 0),
+        )
+        for i in range(365)
     ]
 
     recent = [
@@ -123,6 +128,7 @@ def _build_dashboard_payload(
             "first_name": user.first_name,
             "last_name": user.last_name,
             "username": user.username,
+            "timezone": user.timezone or "UTC",
             "total_points": user.total_points,
             "rank": rank,
             "tier": tier_data["tier"],
@@ -131,6 +137,7 @@ def _build_dashboard_payload(
             "points_to_next_tier": tier_data.get("points_to_next", 0),
             "streak": user.current_streak,
             "badges": json.loads(user.badges or "[]"),
+            "total_activities": len(activities),  # real total, not capped
         },
         sport_breakdown=sport_breakdown,
         weekly_trend=weekly_trend,
@@ -220,3 +227,58 @@ def get_friend_profile(
         )
 
     return _build_dashboard_payload(target_user, user_id, session)
+
+
+# ---------------------------------------------------------------------------
+# Admin: Recompute streaks from activity history
+# ---------------------------------------------------------------------------
+
+from app.services.streak import compute_streak  # noqa: E402
+
+admin_router = APIRouter(prefix="/api/admin", tags=["admin"])
+
+
+@admin_router.post("/recompute-streaks")
+def recompute_all_streaks(
+    current_user: User = Depends(get_current_user),
+    session: Session = Depends(get_session),
+):
+    """
+    Recompute current_streak and last_active_date for every user from their
+    actual activity history.  This fixes users whose streak counters were
+    incorrectly set by bulk seed inserts.
+    """
+    users = session.exec(select(User)).all()
+    updated = 0
+
+    for user in users:
+        # Fetch all activities ordered chronologically (oldest first)
+        acts = session.exec(
+            select(Activity)
+            .where(Activity.user_id == user.id)
+            .order_by(Activity.logged_at.asc())  # type: ignore[union-attr]
+        ).all()
+
+        if not acts:
+            user.current_streak = 0
+            user.last_active_date = None
+            session.add(user)
+            continue
+
+        streak = 0
+        last_date = None
+        for act in acts:
+            streak, last_date = compute_streak(
+                last_active_date=last_date,
+                current_streak=streak,
+                logged_at=act.logged_at,
+                user_timezone=user.timezone or "UTC",
+            )
+
+        user.current_streak = streak
+        user.last_active_date = last_date
+        session.add(user)
+        updated += 1
+
+    session.commit()
+    return {"message": f"Recomputed streaks for {updated} users."}

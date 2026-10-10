@@ -270,6 +270,16 @@ class ChallengeCreate(BaseModel):
             raise ValueError("end_date must be in the future")
         return v
 
+    @model_validator(mode="after")
+    def validate_sport_metric_match(self) -> "ChallengeCreate":
+        if self.sport:
+            expected = SPORT_METRIC_MAP.get(self.sport)
+            if self.metric_type != "points" and self.metric_type != expected:
+                raise ValueError(
+                    f"Sport '{self.sport.value}' only supports metric '{expected}' or 'points', got '{self.metric_type}'"
+                )
+        return self
+
 
 class ChallengeRespond(BaseModel):
     action: str = Field(..., pattern=r"^(accept|decline)$")

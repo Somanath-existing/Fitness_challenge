@@ -57,7 +57,7 @@ function NavBar() {
         </nav>
 
         {/* User info */}
-        <div className="ml-auto flex items-center gap-3">
+        <div className="ml-auto flex items-center gap-2 sm:gap-3">
           {firstName ? (
             <>
               <div className="hidden sm:flex flex-col items-end">
@@ -68,7 +68,7 @@ function NavBar() {
                 <span className="text-xs text-gray-400">{totalPoints.toLocaleString()} pts</span>
               </div>
               {/* Avatar circle */}
-              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-violet-500 to-purple-700 flex items-center justify-center text-white text-sm font-bold shadow">
+              <div className="w-8 h-8 rounded-full bg-gradient-to-br from-violet-500 to-purple-700 flex items-center justify-center text-white text-sm font-bold shadow shrink-0">
                 {firstName[0]}
               </div>
               <button
@@ -77,9 +77,11 @@ function NavBar() {
                   clearUser()
                   navigate('/register')
                 }}
-                className="text-xs text-gray-400 hover:text-gray-700 transition-colors ml-1"
+                title="Sign out"
+                className="flex items-center gap-1 px-2.5 py-1.5 rounded-xl text-xs font-semibold text-rose-600 bg-rose-50 hover:bg-rose-100 transition-colors shrink-0"
               >
-                Sign out
+                <span>🚪</span>
+                <span className="hidden sm:inline">Sign out</span>
               </button>
             </>
           ) : (

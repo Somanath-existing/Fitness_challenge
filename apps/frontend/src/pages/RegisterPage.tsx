@@ -6,21 +6,6 @@ import { useUserStore } from '../stores/userStore'
 
 const detectedTz = typeof Intl !== 'undefined' ? Intl.DateTimeFormat().resolvedOptions().timeZone : 'UTC'
 
-const TIMEZONES = Array.from(
-  new Set([
-    detectedTz,
-    'UTC',
-    'Asia/Kolkata',
-    'Asia/Tokyo',
-    'Asia/Shanghai',
-    'Europe/London',
-    'Europe/Rome',
-    'America/New_York',
-    'America/Los_Angeles',
-    'Africa/Nairobi',
-  ])
-)
-
 export default function RegisterPage() {
   const navigate = useNavigate()
   const setUser = useUserStore((s) => s.setUser)
@@ -33,7 +18,7 @@ export default function RegisterPage() {
     email: '',
     username: '',
     password: '',
-    timezone: Intl.DateTimeFormat().resolvedOptions().timeZone || 'UTC',
+    timezone: detectedTz || 'UTC',
     fitness_goal: '',
     bio: '',
   })
@@ -117,6 +102,24 @@ export default function RegisterPage() {
       setError('First and last name are required.')
       return
     }
+    if (form.password) {
+      if (form.password.length < 8) {
+        setError('Password must be at least 8 characters.')
+        return
+      }
+      if (!/[A-Z]/.test(form.password)) {
+        setError('Password must contain at least one uppercase letter.')
+        return
+      }
+      if (!/[0-9]/.test(form.password)) {
+        setError('Password must contain at least one number.')
+        return
+      }
+      if (!/[^A-Za-z0-9]/.test(form.password)) {
+        setError('Password must contain at least one special character (e.g. @, #, !).')
+        return
+      }
+    }
     registerMutation.mutate()
   }
 
@@ -181,6 +184,7 @@ export default function RegisterPage() {
         {mode === 'login' ? (
           <form
             onSubmit={handleLoginSubmit}
+            autoComplete="off"
             className="bg-white rounded-3xl p-7 sm:p-8 border border-gray-100 shadow-sm space-y-4"
           >
             <div>
@@ -194,8 +198,9 @@ export default function RegisterPage() {
               </label>
               <input
                 id="login-identifier"
+                autoComplete="off"
                 className="fit-input !py-3"
-                placeholder="alice_chen or alice@example.com"
+                placeholder="Your username or email"
                 value={loginForm.identifier}
                 onChange={(e) => setLoginForm({ ...loginForm, identifier: e.target.value })}
                 required
@@ -210,6 +215,7 @@ export default function RegisterPage() {
                 <input
                   id="login-password"
                   type={showLoginPassword ? 'text' : 'password'}
+                  autoComplete="new-password"
                   className="fit-input !py-3 !pr-11"
                   placeholder="••••••••"
                   value={loginForm.password}
@@ -348,20 +354,6 @@ export default function RegisterPage() {
                   )}
                 </button>
               </div>
-            </div>
-
-            <div>
-              <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-1.5">Timezone</label>
-              <select
-                id="reg-timezone"
-                className="fit-input !py-2.5 bg-white"
-                value={form.timezone}
-                onChange={(e) => setForm({ ...form, timezone: e.target.value })}
-              >
-                {TIMEZONES.map((tz) => (
-                  <option key={tz} value={tz}>{tz}</option>
-                ))}
-              </select>
             </div>
 
             <div>

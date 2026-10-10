@@ -34,9 +34,21 @@ api.interceptors.response.use(
 
     const detail = err.response?.data?.detail
     if (detail?.message) {
+      // Custom backend error object: { message: string }
       err.message = detail.message
     } else if (typeof detail === 'string') {
+      // Plain string detail
       err.message = detail
+    } else if (Array.isArray(detail)) {
+      // FastAPI / Pydantic 422 validation errors: [{loc, msg, type}, ...]
+      const msgs = detail
+        .map((e: any) => {
+          const field = Array.isArray(e.loc) ? e.loc[e.loc.length - 1] : ''
+          const label = field && field !== 'body' ? `${field}: ` : ''
+          return `${label}${e.msg}`
+        })
+        .join(' · ')
+      err.message = msgs || 'Validation failed. Please check your inputs.'
     }
     return Promise.reject(err)
   }

@@ -102,6 +102,29 @@ const SCORING_HINT: Record<SportType, string> = {
   steps: '1 point per 100 steps',
 }
 
+function calculateMetricFromPoints(sport: SportType, points: number): string {
+  switch (sport) {
+    case 'running':
+      return (points / 100).toFixed(1).replace(/\.0$/, '')
+    case 'walking':
+      return (points / 50).toFixed(1).replace(/\.0$/, '')
+    case 'cycling':
+      return (points / 25).toFixed(1).replace(/\.0$/, '')
+    case 'gym': {
+      const mins = Math.ceil(points / 5)
+      return String(mins)
+    }
+    case 'swimming': {
+      const mins = Math.ceil(points / 15)
+      return String(mins)
+    }
+    case 'steps':
+      return String(points * 100)
+    default:
+      return String(points)
+  }
+}
+
 export default function LogActivityPage() {
   const userId = useUserStore((s) => s.userId)
   const firstName = useUserStore((s) => s.firstName)
@@ -112,12 +135,34 @@ export default function LogActivityPage() {
   const paramSport = searchParams.get('sport') as SportType | null
   const paramTitle = searchParams.get('title')
   const paramTarget = searchParams.get('target')
+  const paramMetricType = searchParams.get('metric_type')
+  const paramPointsTarget = searchParams.get('points_target')
+
+  // Detect if challenge target is points
+  const rawTargetNum = paramTarget ? parseFloat(paramTarget) : null
+  const isPointsFromTitle =
+    paramTitle ? /point/i.test(paramTitle) : false
+  const pointsTargetNum =
+    paramPointsTarget
+      ? parseFloat(paramPointsTarget)
+      : paramMetricType === 'points' && rawTargetNum !== null && !isNaN(rawTargetNum)
+      ? rawTargetNum
+      : isPointsFromTitle && rawTargetNum !== null && !isNaN(rawTargetNum)
+      ? rawTargetNum
+      : null
 
   const initialSport: SportType =
     paramSport && SPORTS.some((s) => s.type === paramSport) ? paramSport : 'running'
 
+  const getMetricValueForSport = (sp: SportType) => {
+    if (pointsTargetNum !== null && !isNaN(pointsTargetNum)) {
+      return calculateMetricFromPoints(sp, pointsTargetNum)
+    }
+    return paramTarget ? String(paramTarget) : ''
+  }
+
   const [sport, setSport] = useState<SportType>(initialSport)
-  const [value, setValue] = useState(paramTarget ? String(paramTarget) : '')
+  const [value, setValue] = useState<string>(getMetricValueForSport(initialSport))
   const [title, setTitle] = useState(paramTitle ? `Quest: ${paramTitle}` : '')
   const [notes, setNotes] = useState('')
   const [success, setSuccess] = useState<{ points: number; badges: string[] } | null>(null)
@@ -129,7 +174,12 @@ export default function LogActivityPage() {
     mutationFn: () =>
       logActivity({
         sport,
-        metric: { type: current.metric, value: value.trim() },
+        metric: {
+          type: current.metric,
+          value: current.metric === 'duration_minsec' && /^\d+$/.test(value.trim())
+            ? `${value.trim()}:00`
+            : value.trim(),
+        },
         title: title.trim() || undefined,
         notes: notes.trim() || undefined,
       }),
@@ -194,7 +244,7 @@ export default function LogActivityPage() {
                 id={`sport-btn-${s.type}`}
                 onClick={() => {
                   setSport(s.type)
-                  setValue('')
+                  setValue(getMetricValueForSport(s.type))
                   setError('')
                 }}
                 className={`flex flex-col items-center justify-center p-3 rounded-2xl border transition-all duration-200 ${
@@ -215,17 +265,22 @@ export default function LogActivityPage() {
 
       {/* Challenge Notice */}
       {paramTitle && (
-        <div className="bg-gradient-to-r from-violet-50 to-indigo-50 border border-violet-200 rounded-2xl p-4 flex items-center justify-between shadow-xs">
+        <div className="bg-gradient-to-r from-violet-50 to-indigo-50 border border-violet-200 rounded-2xl p-4 flex items-center justify-between shadow-xs mb-6">
           <div className="flex items-center gap-2.5">
             <span className="text-xl">🎯</span>
             <div>
               <span className="text-[11px] font-bold text-violet-600 uppercase tracking-wider block">Logging for Challenge</span>
               <span className="text-sm font-extrabold text-gray-900">{paramTitle}</span>
+              {pointsTargetNum !== null && (
+                <span className="text-xs text-violet-600 block mt-0.5">
+                  Calculated for {pointsTargetNum} pts ({SCORING_HINT[sport]})
+                </span>
+              )}
             </div>
           </div>
-          {paramTarget && (
-            <span className="text-xs bg-white text-violet-700 px-3 py-1 rounded-xl font-bold border border-violet-100 shadow-xs">
-              Target: {paramTarget}
+          {(pointsTargetNum !== null || paramTarget) && (
+            <span className="text-xs bg-white text-violet-700 px-3 py-1.5 rounded-xl font-bold border border-violet-100 shadow-xs">
+              Target: {pointsTargetNum !== null ? `${pointsTargetNum} pts` : `${paramTarget} ${current.metric === 'distance_km' ? 'km' : current.metric === 'count' ? 'steps' : 'min'}`}
             </span>
           )}
         </div>
@@ -256,14 +311,14 @@ export default function LogActivityPage() {
           <div>
             <label className="block text-xs font-bold text-gray-500 uppercase tracking-wider mb-2">
               {current.metric === 'distance_km' && 'Total Distance (km)'}
-              {current.metric === 'duration_minsec' && 'Total Duration (MM:SS or Minutes)'}
+              {current.metric === 'duration_minsec' && 'Total Duration (minutes; MM:SS also accepted)'}
               {current.metric === 'count' && 'Total Step Count'}
             </label>
             <div className="relative">
               <input
                 id="activity-metric-input"
                 className="w-full bg-gray-50 border border-gray-200 text-gray-900 rounded-2xl px-5 py-4 text-2xl font-bold font-mono focus:bg-white focus:outline-none focus:ring-2 focus:ring-violet-500 focus:border-transparent transition-all placeholder:text-gray-300"
-                placeholder={current.placeholder}
+                placeholder={current.metric === 'duration_minsec' ? '20' : current.placeholder}
                 value={value}
                 onChange={(e) => setValue(e.target.value)}
                 inputMode={current.metric === 'count' ? 'numeric' : 'decimal'}

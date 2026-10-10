@@ -2,6 +2,7 @@
 
 export type SportType = 'running' | 'walking' | 'cycling' | 'gym' | 'swimming' | 'steps'
 export type MetricType = 'distance_km' | 'duration_minsec' | 'count'
+export type ChallengeMetricType = MetricType | 'points'
 export type Tier = 'rookie' | 'active' | 'athlete' | 'competitor' | 'elite'
 
 // ── User ──────────────────────────────────────────────────────────────────
@@ -77,6 +78,7 @@ export interface DashboardUser {
   first_name: string
   last_name: string
   username?: string
+  timezone: string
   total_points: number
   rank: number
   tier: Tier
@@ -121,7 +123,7 @@ export interface DailyChallenge {
   title: string
   description: string
   sport: SportType
-  metric: { type: MetricType; target: number | string }
+  metric: { type: ChallengeMetricType; target: number | string }
   bonus_points: number
   difficulty: 'easy' | 'medium' | 'hard'
   coach_note: string

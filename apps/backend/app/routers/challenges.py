@@ -31,7 +31,11 @@ from app.models.activity import Activity
 from app.models.challenge import Challenge, ChallengeParticipant
 from app.models.notification import Notification
 from app.schemas import ChallengeCreate, ChallengeRespond
-from app.services.challenge import get_daily_challenge
+from app.services.challenge import (
+    get_daily_challenge,
+    get_fallback_challenge,
+    validate_daily_challenge,
+)
 from app.dependencies import get_current_user, require_self, rate_limit
 
 logger = logging.getLogger(__name__)
@@ -81,6 +85,41 @@ async def daily_challenge(
     if existing_part:
         ch = session.get(Challenge, existing_part.challenge_id)
         if ch:
+            existing_data = {
+                "sport": ch.sport,
+                "metric": {"type": ch.metric_type, "target": ch.target_value},
+            }
+            try:
+                validate_daily_challenge(existing_data)
+            except ValueError as exc:
+                logger.warning(
+                    "Replacing invalid saved daily challenge %s: %s",
+                    ch.id,
+                    exc,
+                )
+                fallback = get_fallback_challenge()
+                fallback_metric = fallback["metric"]
+                fallback_target = fallback_metric["target"]
+                if fallback_metric["type"] == "duration_minsec" and isinstance(fallback_target, str):
+                    minutes, seconds = fallback_target.split(":")
+                    fallback_target_value = float(minutes) + float(seconds) / 60
+                else:
+                    fallback_target_value = float(fallback_target)
+
+                ch.title = fallback["title"]
+                ch.description = fallback["description"]
+                ch.sport = fallback["sport"]
+                ch.metric_type = fallback_metric["type"]
+                ch.target_value = fallback_target_value
+                ch.difficulty = fallback["difficulty"]
+                ch.coach_note = fallback["coach_note"]
+                existing_part.progress = 0
+                existing_part.status = "accepted"
+                session.add(ch)
+                session.add(existing_part)
+                session.commit()
+                session.refresh(ch)
+
             return {
                 "title": ch.title,
                 "description": ch.description,

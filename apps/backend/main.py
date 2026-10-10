@@ -21,6 +21,7 @@ load_dotenv()
 
 from app.database import create_db_and_tables
 from app.routers import users, activities, leaderboard, dashboard, friends, challenges, insights, auth
+from app.routers.dashboard import admin_router
 from app import ws_manager
 
 # ── Logging configuration ────────────────────────────────────────────────────
@@ -122,6 +123,7 @@ app.include_router(dashboard.router)
 app.include_router(friends.router)
 app.include_router(challenges.router)
 app.include_router(insights.router)
+app.include_router(admin_router)
 
 
 # ── Health check ──────────────────────────────────────────────────────────────

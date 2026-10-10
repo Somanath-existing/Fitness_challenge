@@ -12,6 +12,7 @@ import {
   cancelFriendRequest,
 } from '../api/endpoints'
 import { useUserStore } from '../stores/userStore'
+import { formatActivityDate } from '../utils/date'
 import { useNavigate } from 'react-router-dom'
 import TierBadge from '../components/TierBadge'
 import StreakBadge from '../components/StreakBadge'
@@ -198,7 +199,7 @@ function FriendProfileModal({
                       {a.title || `${a.sport.toUpperCase()} session`}
                     </div>
                     <div className="text-[11px] text-gray-400">
-                      {a.raw_value} · {new Date(a.logged_at).toLocaleDateString()}
+                      {a.raw_value} · {formatActivityDate(a.logged_at, athlete?.timezone || 'UTC')}
                     </div>
                   </div>
                   <div className="text-xs font-black text-violet-700 bg-violet-100 px-2.5 py-1 rounded-xl tabular-nums shrink-0">
