@@ -87,7 +87,6 @@ jobs:
         run: npm install --global vercel@latest
 
       - name: Pull Vercel Environment Information
-        working-directory: apps/frontend
         run: vercel pull --yes --environment=production --token=${{ secrets.VERCEL_TOKEN }}
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
@@ -101,7 +100,6 @@ jobs:
           printf '%s\n' '{"version":3,"routes":[{"src":"/(.*)","dest":"/index.html"}]}' > .vercel/output/config.json
 
       - name: Deploy Project Artifacts to Vercel
-        working-directory: apps/frontend
         run: vercel deploy --prebuilt --prod --token=${{ secrets.VERCEL_TOKEN }}
         env:
           VERCEL_ORG_ID: ${{ secrets.VERCEL_ORG_ID }}
