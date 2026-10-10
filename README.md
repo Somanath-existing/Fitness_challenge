@@ -1,330 +1,274 @@
 # FitChallenge
 
-FitChallenge is a full-stack gamified fitness tracking application with activity logging, point-based scoring, daily streaks, performance tiers, real-time leaderboards, activity heatmaps, and AI-generated workout challenges and coaching insights.
+A full-stack fitness tracking app. Log workouts, earn points, compete on a leaderboard, track streaks, and get AI coaching insights.
 
 ---
 
 ## Table of Contents
 
 - [Features](#features)
-- [Architecture & Tech Stack](#architecture--tech-stack)
+- [Tech Stack](#tech-stack)
 - [Project Structure](#project-structure)
-- [Scoring Rules & Performance Tiers](#scoring-rules--performance-tiers)
-- [Quick Start with Docker](#quick-start-with-docker)
-- [Local Development Setup](#local-development-setup)
-  - [Backend Setup](#backend-setup)
-  - [Frontend Setup](#frontend-setup)
-- [Default Seed Accounts](#default-seed-accounts)
+- [Scoring & Tiers](#scoring--tiers)
+- [Quick Start (Docker)](#quick-start-docker)
+- [Local Development](#local-development)
+- [Seed Accounts](#seed-accounts)
 - [Environment Variables](#environment-variables)
-- [API Overview](#api-overview)
-- [Running Tests](#running-tests)
+- [API Routes](#api-routes)
+- [Tests](#tests)
 - [Deployment](#deployment)
 
 ---
 
 ## Features
 
-- **Activity Tracking**: Log workouts for 6 supported sports (Running, Walking, Cycling, Gym, Swimming, Steps).
-- **Automated Scoring**: Rule-based point system calculated automatically per activity.
-- **Streak Calculation**: Timezone-aware streak tracking requiring continuous daily activity.
-- **Performance Tiers & Badges**: Progression system (Rookie to Elite) and milestone badge awards.
-- **Real-Time Leaderboard**: Live ranking updates delivered over WebSockets.
-- **Activity Heatmap**: Rolling 365-day calendar visualization of daily points and workout consistency.
-- **AI Challenges & Coaching**: Personalized daily challenges and training insights powered by Groq (LLaMA 3.3).
-- **Social Features**: Friend requests, friends activity feed, and head-to-head streak comparisons.
+- Log activities for 6 sports: Running, Walking, Cycling, Gym, Swimming, Steps
+- Points calculated automatically per activity
+- Daily streak tracking (timezone-aware)
+- Five performance tiers: Rookie → Active → Athlete → Competitor → Elite
+- Milestone badges awarded at point thresholds
+- Real-time leaderboard via WebSocket
+- 365-day activity heatmap
+- AI coaching insights powered by Groq (cached 1 hour per user, falls back to generic tips on API failure)
+- AI-generated daily challenges
+- Friend requests and friends activity feed
 
 ---
 
-## Architecture & Tech Stack
+## Tech Stack
 
-### Backend
-- **Framework**: FastAPI (Python 3.11)
-- **Database & ORM**: PostgreSQL 15, SQLModel (SQLAlchemy)
-- **Migrations**: Alembic
-- **Real-Time Updates**: Starlette WebSockets
-- **Authentication**: JWT (JSON Web Tokens) with Argon2/bcrypt password hashing
-- **AI Provider**: Groq API (`llama-3.3-70b-versatile`)
+**Backend**
+- FastAPI (Python 3.11)
+- PostgreSQL + SQLModel (SQLAlchemy)
+- Alembic migrations
+- JWT authentication, bcrypt password hashing
+- Groq API for AI insights and challenges
 
-### Frontend
-- **Framework**: React 18 with TypeScript
-- **Build Tool**: Vite
-- **Styling**: Tailwind CSS
-- **State Management**: Zustand
-- **Server State & Caching**: TanStack React Query
-- **Charts & Visualizations**: Recharts, `react-activity-calendar`
-- **Routing**: React Router v6
+**Frontend**
+- React 18 + TypeScript
+- Vite
+- Tailwind CSS
+- Zustand (client state), TanStack React Query (server state)
+- Recharts, react-activity-calendar
+- React Router v6
 
 ---
 
 ## Project Structure
 
-```text
+```
 fitness-challenge/
 ├── apps/
 │   ├── backend/
-│   │   ├── alembic/              # Database migration scripts
+│   │   ├── alembic/            # DB migrations
 │   │   ├── app/
-│   │   │   ├── models/           # SQLModel database tables (User, Activity, Challenge, Friendship)
-│   │   │   ├── routers/          # API route handlers (auth, activities, leaderboard, dashboard, etc.)
-│   │   │   ├── services/         # Business logic (scoring, streaks, tiers, badges, insights)
-│   │   │   ├── database.py       # Engine initialization and session dependency
-│   │   │   ├── dependencies.py   # Auth and token validation dependencies
-│   │   │   ├── schemas.py        # Pydantic request and response models
-│   │   │   └── ws_manager.py     # WebSocket connection manager
-│   │   ├── main.py               # FastAPI application entrypoint
-│   │   ├── seed.py               # Database seeder for demo users and activities
-│   │   └── requirements.txt      # Python dependencies
+│   │   │   ├── models/         # SQLModel tables (User, Activity, Challenge, Friendship)
+│   │   │   ├── routers/        # Route handlers
+│   │   │   ├── services/       # Business logic (scoring, streaks, tiers, badges, insights)
+│   │   │   ├── database.py
+│   │   │   ├── dependencies.py # Auth + rate limiting
+│   │   │   ├── schemas.py
+│   │   │   └── ws_manager.py
+│   │   ├── main.py
+│   │   ├── seed.py
+│   │   └── requirements.txt
 │   └── frontend/
 │       ├── src/
-│       │   ├── api/              # API client and endpoints (Axios)
-│       │   ├── components/       # Reusable UI components
-│       │   ├── pages/            # View pages (Leaderboard, Dashboard, Log, Challenges, Friends)
-│       │   ├── stores/           # Zustand client state stores
-│       │   └── types/            # TypeScript data contracts
-│       ├── package.json          # Node dependencies and scripts
-│       └── vite.config.ts        # Vite configuration
-├── tests/                        # Backend test suite (API, scoring, streak, auth)
-├── docker-compose.yml            # Local development orchestration
-└── docker-compose.prod.yml       # Optional Docker Compose production setup
+│       │   ├── api/
+│       │   ├── components/
+│       │   ├── pages/
+│       │   ├── stores/
+│       │   └── types/
+│       ├── package.json
+│       └── vite.config.ts
+├── tests/                      # pytest suite (API, auth, scoring, streaks, tiers, challenges)
+├── docker-compose.yml
+└── docker-compose.prod.yml
 ```
 
 ---
 
-## Scoring Rules & Performance Tiers
+## Scoring & Tiers
 
-### Point System
-Points are calculated deterministically using the following conversion rates:
+### Points per activity
 
-| Sport | Metric | Conversion Rate | Formula |
+| Sport | Input | Rate | Formula |
 |---|---|---|---|
-| **Running** | Distance (km) | 100 pts / km | `floor(km * 100)` |
-| **Walking** | Distance (km) | 50 pts / km | `floor(km * 50)` |
-| **Cycling** | Distance (km) | 25 pts / km | `floor(km * 25)` |
-| **Swimming** | Duration (MM:SS) | 15 pts / min | `floor(seconds / 60) * 15` |
-| **Gym** | Duration (MM:SS) | 5 pts / min | `floor(seconds / 60) * 5` |
-| **Steps** | Step Count | 1 pt / 100 steps | `floor(steps / 100)` |
+| Running | km | 100 pts/km | `floor(km × 100)` |
+| Walking | km | 50 pts/km | `floor(km × 50)` |
+| Cycling | km | 25 pts/km | `floor(km × 25)` |
+| Swimming | MM:SS | 15 pts/min | `floor(seconds ÷ 60) × 15` |
+| Gym | MM:SS | 5 pts/min | `floor(seconds ÷ 60) × 5` |
+| Steps | count | 1 pt/100 steps | `floor(steps ÷ 100)` |
 
-### Performance Tiers
+### Performance tiers
 
-| Tier | Required Total Points |
+| Tier | Points |
 |---|---|
-| **Rookie** | 0 – 500 pts |
-| **Active** | 501 – 2,000 pts |
-| **Athlete** | 2,001 – 5,000 pts |
-| **Competitor** | 5,001 – 10,000 pts |
-| **Elite** | 10,001+ pts |
+| Rookie | 0 – 500 |
+| Active | 501 – 2,000 |
+| Athlete | 2,001 – 5,000 |
+| Competitor | 5,001 – 10,000 |
+| Elite | 10,001+ |
 
 ---
 
-## Quick Start with Docker
+## Quick Start (Docker)
 
-Prerequisites: [Docker Desktop](https://www.docker.com/products/docker-desktop/) installed and running.
+Requires [Docker Desktop](https://www.docker.com/products/docker-desktop/).
 
-1. **Clone the repository and copy the environment configuration:**
-   ```bash
-   cp .env.example .env
-   ```
+```bash
+cp .env.example .env
+# Add your GROQ_API_KEY to .env
+docker compose up --build
+```
 
-2. **Add your Groq API key in `.env`:**
-   ```env
-   GROQ_API_KEY=gsk_your_groq_api_key_here
-   ```
-
-3. **Start the containers:**
-   ```bash
-   docker compose up --build
-   ```
-
-The database migrations will run and seed demo data automatically.
-
-- **Frontend**: [http://localhost:5173](http://localhost:5173)
-- **Backend API Docs (Swagger UI)**: [http://localhost:3001/docs](http://localhost:3001/docs)
-- **Alternative API Docs (ReDoc)**: [http://localhost:3001/redoc](http://localhost:3001/redoc)
+- Frontend: http://localhost:5173
+- API docs: http://localhost:3001/docs
 
 ---
 
-## Local Development Setup
+## Local Development
 
-### Backend Setup
+### Backend
 
-Prerequisites: Python 3.11+ and PostgreSQL 15+.
+Requires Python 3.11+ and PostgreSQL.
 
-1. **Navigate to the backend directory and create a virtual environment:**
-   ```bash
-   cd apps/backend
-   python -m venv .venv
-   ```
+```bash
+cd apps/backend
+python -m venv .venv
+# Windows: .venv\Scripts\Activate.ps1
+# macOS/Linux: source .venv/bin/activate
+pip install -r requirements.txt
+```
 
-2. **Activate the virtual environment:**
-   - Linux/macOS:
-     ```bash
-     source .venv/bin/activate
-     ```
-   - Windows (PowerShell):
-     ```powershell
-     .venv\Scripts\Activate.ps1
-     ```
+Create `apps/backend/.env`:
+```env
+DATABASE_URL=postgresql://fitness:fitness123@localhost:5432/fitness_challenge
+GROQ_API_KEY=gsk_your_key_here
+SECRET_KEY=your_random_secret
+FRONTEND_URL=http://localhost:5173
+ENVIRONMENT=development
+```
 
-3. **Install dependencies:**
-   ```bash
-   pip install -r requirements.txt
-   ```
+```bash
+alembic upgrade head
+python seed.py
+uvicorn main:app --reload --port 3001
+```
 
-4. **Configure environment variables:**
-   Create a `.env` file in `apps/backend/` (or use the root `.env`):
-   ```env
-   DATABASE_URL=postgresql://fitness:fitness123@localhost:5432/fitness_challenge
-   GROQ_API_KEY=gsk_your_groq_api_key
-   SECRET_KEY=change_me_to_a_random_secret_key
-   FRONTEND_URL=http://localhost:5173
-   ENVIRONMENT=development
-   ```
+### Frontend
 
-5. **Apply database migrations:**
-   ```bash
-   alembic upgrade head
-   ```
+Requires Node.js 18+.
 
-6. **Seed demo data:**
-   ```bash
-   python seed.py
-   ```
+```bash
+cd apps/frontend
+npm install
+```
 
-7. **Start the API server:**
-   ```bash
-   uvicorn main:app --reload --port 3001
-   ```
+Create `apps/frontend/.env`:
+```env
+VITE_API_URL=http://localhost:3001
+```
+
+```bash
+npm run dev
+```
 
 ---
 
-### Frontend Setup
+## Seed Accounts
 
-Prerequisites: Node.js 18+ and npm.
+After running `python seed.py`, 10 demo accounts are created with 30 days of activity history.
 
-1. **Navigate to the frontend directory:**
-   ```bash
-   cd apps/frontend
-   ```
+**Password for all accounts:** `Password123!`
 
-2. **Install dependencies:**
-   ```bash
-   npm install
-   ```
-
-3. **Set environment variables:**
-   Create `.env` in `apps/frontend/`:
-   ```env
-   VITE_API_URL=http://localhost:3001
-   ```
-
-4. **Start the development server:**
-   ```bash
-   npm run dev
-   ```
-
----
-
-## Default Seed Accounts
-
-When seeded, the database contains 10 demo athlete profiles with 30 days of workout history:
-
-- **Password (for all demo accounts)**: `Password123!`
-- **Sample Usernames**:
-  - `alice_chen`
-  - `bob_patel`
-  - `priya_sharma`
-  - `marcus_webb`
-  - `sofia_rossi`
-  - `kenji_tanaka`
-  - `aisha_omar`
-  - `luca_bianchi`
-  - `mei_lin`
-  - `arjun_nair`
+Usernames: `alice_chen`, `bob_patel`, `priya_sharma`, `marcus_webb`, `sofia_rossi`, `kenji_tanaka`, `aisha_omar`, `luca_bianchi`, `mei_lin`, `arjun_nair`
 
 ---
 
 ## Environment Variables
 
-| Variable | Scope | Required | Description |
+| Variable | Where | Required | Notes |
 |---|---|---|---|
-| `DATABASE_URL` | Backend | Yes | PostgreSQL connection string (Neon in production; use Neon’s pooled URL and require SSL) |
-| `GROQ_API_KEY` | Backend | Yes | Groq API key for challenge and insight generation |
-| `SECRET_KEY` | Backend | Yes | Secret string used for signing JWT access tokens |
-| `FRONTEND_URL` | Backend | Yes | Allowed frontend origin for CORS (Vercel production URL in production) |
-| `ENVIRONMENT` | Backend | No | Execution mode (`development` or `production`) |
-| `ACCESS_TOKEN_EXPIRE_MINUTES` | Backend | No | JWT lifespan in minutes (default: `30`) |
-| `LOGIN_MAX_FAILURES` | Backend | No | Maximum failed attempts before account lockout (default: `5`) |
+| `DATABASE_URL` | Backend | Yes | PostgreSQL connection string |
+| `GROQ_API_KEY` | Backend | Yes | For AI insights and challenges |
+| `SECRET_KEY` | Backend | Yes | Signs JWT tokens |
+| `FRONTEND_URL` | Backend | Yes | Allowed CORS origin (comma-separated for multiple) |
+| `ENVIRONMENT` | Backend | No | `development` or `production` (default: `development`) |
+| `ACCESS_TOKEN_EXPIRE_MINUTES` | Backend | No | JWT lifespan (default: `30`) |
+| `LOGIN_RATE_LIMIT_MAX` | Backend | No | Max login attempts per 5 min per IP (default: `30`) |
+| `REGISTER_RATE_LIMIT_MAX` | Backend | No | Max registrations per hour per IP (default: `30`) |
+| `INSIGHTS_RATE_LIMIT_MAX` | Backend | No | Max insight requests per hour per IP (default: `30`) |
+| `DAILY_CHALLENGE_RATE_LIMIT_MAX` | Backend | No | Max challenge requests per window per IP (default: `20`) |
+| `LOGIN_MAX_FAILURES` | Backend | No | Failed attempts before account lockout (default: `5`) |
 | `LOGIN_LOCKOUT_SECONDS` | Backend | No | Lockout duration in seconds (default: `900`) |
-| `VITE_API_URL` | Frontend | Yes | Public base URL of the Render backend API (local default: `http://localhost:3001`) |
+| `VITE_API_URL` | Frontend | Yes | Backend API base URL |
 
 ---
 
-## API Overview
+## API Routes
 
-| Method | Endpoint | Description |
+| Method | Path | Description |
 |---|---|---|
-| `POST` | `/auth/register` | Register a new user |
-| `POST` | `/auth/login` | Authenticate user and receive JWT access token |
-| `GET` | `/auth/me` | Fetch authenticated user profile |
-| `POST` | `/activities` | Log a new workout activity and receive calculated points |
-| `GET` | `/activities/user/{id}` | List activities for a user |
-| `GET` | `/leaderboard` | View leaderboard rankings (supports sport and timeframe filters) |
-| `GET` | `/dashboard/{id}` | Retrieve dashboard statistics, weekly trends, and heatmap data |
-| `GET` | `/challenges/daily/{id}` | Fetch current daily challenges |
-| `POST` | `/challenges/{id}/complete` | Mark a challenge complete and claim bonus points |
-| `GET` | `/friends` | List accepted friends |
-| `POST` | `/friends/request` | Send a friend request |
-| `POST` | `/friends/accept` | Accept a pending friend request |
-| `GET` | `/insights/{id}` | Retrieve personalized AI training tips |
-| `GET` | `/health` | Service health check |
-| `WS` | `/ws` | WebSocket endpoint for real-time leaderboard broadcasts |
+| `POST` | `/api/users` | Register a new account |
+| `POST` | `/api/auth/login` | Login, returns JWT + sets httpOnly cookie |
+| `POST` | `/api/auth/logout` | Clear auth cookie |
+| `GET` | `/api/auth/me` | Current user profile |
+| `POST` | `/api/activities` | Log an activity |
+| `GET` | `/api/activities/user/{id}` | List activities for a user |
+| `GET` | `/api/leaderboard` | Leaderboard (supports sport + scope filters) |
+| `GET` | `/api/dashboard/{id}` | Dashboard stats, heatmap, streak |
+| `GET` | `/api/challenges/daily/{id}` | Get today's challenges |
+| `POST` | `/api/challenges/{id}/complete` | Complete a challenge |
+| `GET` | `/api/insights/{id}` | AI coaching insights (cached 1 hr) |
+| `GET` | `/api/friends` | List friends |
+| `POST` | `/api/friends/request` | Send a friend request |
+| `POST` | `/api/friends/{id}/respond` | Accept or decline a request |
+| `GET` | `/health` | Health check |
+| `WS` | `/ws` | WebSocket — real-time leaderboard updates |
 
 ---
 
-## Running Tests
-
-The test suite covers API endpoints, authentication, scoring logic, streaks, and tier calculations using an in-memory SQLite database.
-
-From the repository root:
+## Tests
 
 ```bash
-# In an activated Python virtual environment:
 python -m pytest tests/ -v
 ```
+
+Covers: API endpoints, authentication, scoring, streak logic, tier calculations, challenge metrics.
 
 ---
 
 ## Deployment
 
-The production app uses **Neon** for PostgreSQL, **Render** for the FastAPI backend, and **Vercel** for the React frontend.
+Production runs on **Neon** (PostgreSQL), **Render** (backend), and **Vercel** (frontend).
 
-### 1. Create the Neon database
+### 1. Neon
 
-1. Create a PostgreSQL project in [Neon](https://neon.tech/).
-2. Copy the connection string from the Neon dashboard. Use the pooled connection string for the deployed backend, and make sure SSL is required (`sslmode=require`).
-3. Keep the connection string private; add it as a Render environment variable rather than committing it to the repository.
+Create a PostgreSQL project at [neon.tech](https://neon.tech). Use the pooled connection string with `sslmode=require`.
 
-### 2. Deploy the backend to Render
+### 2. Render
 
-1. Create a Docker web service in [Render](https://render.com/) connected to this repository. Set the service root directory to `apps/backend` and the Dockerfile path to `Dockerfile`.
-2. Configure these environment variables in the Render service:
-   - `DATABASE_URL`: Neon PostgreSQL connection string.
-   - `GROQ_API_KEY`: Groq API key used for AI challenges and insights.
-   - `SECRET_KEY`: a long, randomly generated secret used to sign authentication tokens.
-   - `FRONTEND_URL`: the production Vercel origin, for example `https://your-app.vercel.app` (no trailing slash).
-   - `ENVIRONMENT`: `production`.
-3. Deploy the service and confirm its `/health` endpoint responds successfully. The container runs Alembic migrations before starting the API; Render supplies the port through `PORT`.
-4. Copy the public Render service URL; it is used by the frontend as `VITE_API_URL`.
+Create a Docker web service pointing to `apps/backend/Dockerfile`. Set these environment variables in Render:
 
-### 3. Deploy the frontend to Vercel
+- `DATABASE_URL` — Neon connection string
+- `GROQ_API_KEY`
+- `SECRET_KEY`
+- `FRONTEND_URL` — your Vercel URL, e.g. `https://your-app.vercel.app`
+- `ENVIRONMENT=production`
 
-1. Import the repository into [Vercel](https://vercel.com/), setting the project root directory to `apps/frontend`.
-2. The included `vercel.json` rewrites frontend routes to `index.html` for client-side routing.
-3. For GitHub Actions deployments, the workflow obtains the public API URL from the Render service identified by `RENDER_SERVICE_ID` and injects it into the frontend build. No separate `VITE_API_URL` GitHub variable is needed.
+The container runs Alembic migrations on startup before the API starts.
 
-### Continuous deployment
+### 3. Vercel
 
-The GitHub Actions workflow in `.github/workflows/deploy.yml` triggers deployments on pushes to `main` when the corresponding app changes. Configure these repository secrets for the automated deployments:
+Import the repo and set the root directory to `apps/frontend`. The included `vercel.json` handles client-side routing rewrites.
+
+### CI/CD
+
+GitHub Actions (`.github/workflows/deploy.yml`) deploys on pushes to `main` when the relevant app files change.
+
+Required repository secrets:
 
 - `RENDER_SERVICE_ID`
 - `RENDER_API_KEY`
@@ -332,4 +276,4 @@ The GitHub Actions workflow in `.github/workflows/deploy.yml` triggers deploymen
 - `VERCEL_ORG_ID`
 - `VERCEL_PROJECT_ID`
 
-The workflow uses `RENDER_SERVICE_ID` and `RENDER_API_KEY` to retrieve the Render service's public URL at build time, so the frontend API URL stays in sync with the deployed backend without duplicating it in GitHub variables. Configure the other production environment variables in Render and Vercel themselves; do not store database credentials, API keys, or signing secrets in GitHub source files.
+The workflow fetches the Render service URL at build time and injects it into the Vercel build as `VITE_API_URL` automatically.
