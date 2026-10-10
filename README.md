@@ -319,7 +319,7 @@ The production app uses **Neon** for PostgreSQL, **Render** for the FastAPI back
 ### 3. Deploy the frontend to Vercel
 
 1. Import the repository into [Vercel](https://vercel.com/), setting the project root directory to `apps/frontend`.
-2. Set the production environment variable `VITE_API_URL` to the public Render backend URL (for example, `https://your-api.onrender.com`).
+2. Set the production environment variable `VITE_API_URL` to the public Render backend URL (for example, `https://your-api.onrender.com`). This is a public URL, not a secret.
 3. Deploy the project. The included `vercel.json` rewrites frontend routes to `index.html` for client-side routing.
 
 ### Continuous deployment
@@ -332,4 +332,8 @@ The GitHub Actions workflow in `.github/workflows/deploy.yml` triggers deploymen
 - `VERCEL_ORG_ID`
 - `VERCEL_PROJECT_ID`
 
-Configure the production environment variables in Render and Vercel themselves; do not store database credentials, API keys, or signing secrets in GitHub source files.
+Also configure this GitHub Actions repository variable (Settings → Secrets and variables → Actions → Variables) so the workflow can bake the backend URL into the static frontend build:
+
+- `VITE_API_URL`: the public Render backend URL, for example `https://your-api.onrender.com` (not a secret).
+
+Configure the other production environment variables in Render and Vercel themselves; do not store database credentials, API keys, or signing secrets in GitHub source files.

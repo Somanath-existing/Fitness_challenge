@@ -92,21 +92,27 @@ jobs:
         run: |
           node <<'NODE'
           const fs = require('node:fs')
-          const envFile = fs.readFileSync('.vercel/.env.production.local', 'utf8')
-          const assignment = envFile.match(/^VITE_API_URL=(.*)$/m)
-          const apiUrl = assignment?.[1].trim().replace(/^(['"])(.*)\1$/, '$2')
+          const apiUrl = process.env.VITE_API_URL?.trim()
 
           if (!apiUrl) {
-            throw new Error('VITE_API_URL is missing from Vercel production environment variables')
+            throw new Error('Set the VITE_API_URL GitHub Actions variable to the public Render backend URL')
           }
 
-          const parsedUrl = new URL(apiUrl)
+          let parsedUrl
+          try {
+            parsedUrl = new URL(apiUrl)
+          } catch {
+            throw new Error('VITE_API_URL must be a valid HTTPS URL for the deployed backend')
+          }
+
           if (parsedUrl.protocol !== 'https:' || parsedUrl.hostname === 'localhost') {
             throw new Error('VITE_API_URL must be an HTTPS URL for the deployed backend')
           }
 
           fs.appendFileSync(process.env.GITHUB_ENV, `VITE_API_URL=${apiUrl}\n`)
           NODE
+        env:
+          VITE_API_URL: ${{ vars.VITE_API_URL }}
 
       - name: Build frontend
         working-directory: apps/frontend
