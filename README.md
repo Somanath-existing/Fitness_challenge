@@ -5,7 +5,7 @@ A full-stack fitness tracking app. Log workouts, earn points, compete on a leade
 ---
 
 ## Table of Contents
--[Live Demo](#live-demo)
+- [Live Demo](#live-demo)
 - [Features](#features)
 - [Tech Stack](#tech-stack)
 - [Project Structure](#project-structure)
