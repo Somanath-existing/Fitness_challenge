@@ -92,9 +92,9 @@ jobs:
         run: |
           node <<'NODE'
           const fs = require('node:fs')
-          const dotenv = require('./apps/frontend/node_modules/dotenv')
           const envFile = fs.readFileSync('.vercel/.env.production.local', 'utf8')
-          const apiUrl = dotenv.parse(envFile).VITE_API_URL
+          const assignment = envFile.match(/^VITE_API_URL=(.*)$/m)
+          const apiUrl = assignment?.[1].trim().replace(/^(['"])(.*)\1$/, '$2')
 
           if (!apiUrl) {
             throw new Error('VITE_API_URL is missing from Vercel production environment variables')
